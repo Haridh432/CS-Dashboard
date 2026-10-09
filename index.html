@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CircularSeed Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <header class="header">
+        <div class="logo">
+            <h1>CircularSeed</h1>
+            <span class="subtitle">Plastic Shredder</span>
+        </div>
+        <div class="header-status">
+            <div class="status-indicator">
+                <span class="status-dot" id="conn-dot"></span>
+                <span id="conn-status">DEMO</span>
+            </div>
+            <div class="machine-state" id="header-machine-state">RUNNING</div>
+        </div>
+    </header>
+
+    <main class="dashboard-grid">
+        <!-- Main machine status card -->
+        <section class="card">
+            <h2>Machine Status</h2>
+            <div class="data-row">
+                <span>State</span>
+                <strong id="m-state" class="status-running">RUNNING</strong>
+            </div>
+            <div class="data-row">
+                <span>Run ID</span>
+                <strong id="m-runid">--</strong>
+            </div>
+            <div class="data-row">
+                <span>Runtime</span>
+                <strong id="m-runtime">00:00:00</strong>
+            </div>
+            <div class="controls-grid" style="margin-top: 20px;">
+                <button class="btn btn-start" onclick="sendCommand('START')">START</button>
+                <button class="btn btn-stop" onclick="sendCommand('STOP')">STOP</button>
+            </div>
+        </section>
+
+        <!-- DC POWER card -->
+        <section class="card">
+            <h2>DC Power</h2>
+            <div class="data-row">
+                <span>Voltage</span>
+                <strong id="p-volt">0.0 V</strong>
+            </div>
+            <div class="data-row">
+                <span>Current</span>
+                <strong id="p-curr">0.0 A</strong>
+            </div>
+            <div class="data-row">
+                <span>Power</span>
+                <strong id="p-power">0 W</strong>
+            </div>
+            <div class="data-row">
+                <span>Energy</span>
+                <strong id="p-energy">0.00 kWh</strong>
+            </div>
+        </section>
+
+        <!-- MOTOR card -->
+        <section class="card">
+            <h2>Motor 1</h2>
+            <div class="data-row">
+                <span>Temperature</span>
+                <strong id="mo-temp">0 &deg;C</strong>
+            </div>
+            
+            <h2 style="margin-top: 20px;">Motor 2</h2>
+            <div class="data-row">
+                <span>Temperature</span>
+                <strong id="mo2-temp">0 &deg;C</strong>
+            </div>
+        </section>
+
+        <!-- BATTERY card -->
+        <section class="card">
+            <h2>Battery</h2>
+            <div class="data-row">
+                <span>Voltage</span>
+                <strong id="b-volt">0.0 V</strong>
+            </div>
+            <div class="data-row">
+                <span>SOC</span>
+                <strong id="b-soc">0 %</strong>
+            </div>
+            <div class="data-row">
+                <span>Current</span>
+                <strong id="b-curr">0.0 A</strong>
+            </div>
+            <div class="data-row">
+                <span>Status</span>
+                <strong id="b-status">--</strong>
+            </div>
+        </section>
+
+    </main>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
