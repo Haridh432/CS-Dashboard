@@ -23,6 +23,82 @@ class GatewayWebSocketClient {
         this.onFleetUpdate = null;
         this.onAck = null;
         this.onError = null;
+        this.demoSimTimer = null;
+    }
+
+    startStaticDemoSimulator() {
+        if (this.demoSimTimer) clearInterval(this.demoSimTimer);
+        this.setStatus('CONNECTED', 'DEMO LIVE');
+        let simSeconds = 1740;
+
+        this.demoSimTimer = setInterval(() => {
+            simSeconds += 1;
+            const mId = this.subscribedMachineId || 'CS-FS-0001';
+            const isProto = mId === 'CS-FS-0003';
+            const baseRpm = isProto ? 350 : 850;
+            const rpm1 = Math.round(baseRpm + (Math.random() * 8 - 4));
+            const rpm2 = Math.round(baseRpm + (Math.random() * 8 - 4));
+            const volt = isProto ? 12.1 : +(48.2 + (Math.random() * 0.2 - 0.1)).toFixed(1);
+            const curr = isProto ? 1.8 : +(24.2 + (Math.random() * 0.4 - 0.2)).toFixed(1);
+            const power = Math.round(volt * curr);
+            const bVolt = isProto ? 12.6 : +(51.3 + (Math.random() * 0.2 - 0.1)).toFixed(1);
+            const bCurr = isProto ? 1.8 : +(5.0 + (Math.random() * 0.2 - 0.1)).toFixed(1);
+            const bPower = Math.round(bVolt * bCurr);
+
+            const packet = {
+                type: 'telemetry',
+                machineId: mId,
+                timestamp: new Date().toISOString(),
+                sequence: Math.floor(Date.now() / 1000),
+                isDemo: true,
+                isLive: true,
+                machine: {
+                    state: 'RUNNING',
+                    runId: 'RUN-2026-DEMO',
+                    runtimeSeconds: simSeconds
+                },
+                dcPower: {
+                    voltage: volt,
+                    current: curr,
+                    power: power,
+                    energyWh: 3500 + Math.round((simSeconds - 1740) * 0.3),
+                    lifetimeEnergyKWh: 128.5
+                },
+                motors: isProto ? [
+                    { id: 'M1', rpm: rpm1, temperature: 27.2, current: curr, state: 'RUNNING', fault: 'NORMAL', driver: 'L298N', encoderType: 'Optical Quadrature' }
+                ] : [
+                    { id: 'M1', rpm: rpm1, temperature: 48.6, current: +(curr / 2).toFixed(1), state: 'RUNNING', fault: 'NORMAL' },
+                    { id: 'M2', rpm: rpm2, temperature: 47.9, current: +(curr / 2).toFixed(1), state: 'RUNNING', fault: 'NORMAL' }
+                ],
+                battery: {
+                    configured: true,
+                    voltage: bVolt,
+                    soc: 82,
+                    current: bCurr,
+                    powerW: bPower,
+                    temperature: 29.1,
+                    status: 'CHARGING',
+                    chargingState: 'BULK'
+                },
+                solar: {
+                    configured: true,
+                    powerW: 420,
+                    dailyEnergyWh: 1650
+                },
+                safety: {
+                    estopActive: false,
+                    guardClosed: true,
+                    overload: false,
+                    overtemperature: false,
+                    jamDetected: false,
+                    commsError: false
+                }
+            };
+
+            if (typeof this.onTelemetry === 'function') {
+                this.onTelemetry(packet);
+            }
+        }, 1000);
     }
 
     setStatus(newStatus, detail = '') {
@@ -35,6 +111,16 @@ class GatewayWebSocketClient {
 
     connect(endpointUrl) {
         if (this.socket && (this.socket.readyState === WebSocket.CONNECTING || this.socket.readyState === WebSocket.OPEN)) {
+            return;
+        }
+
+        const isStaticHost = typeof window !== 'undefined' && (
+            window.location.hostname.includes('github.io') ||
+            window.location.protocol === 'file:'
+        );
+
+        if (isStaticHost) {
+            this.startStaticDemoSimulator();
             return;
         }
 

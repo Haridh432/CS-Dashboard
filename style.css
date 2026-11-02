@@ -295,10 +295,13 @@ h1, h2, h3, h4, h5, h6,
     margin-top: 0;
 }
 .login-hint-panel.open {
-    max-height: 340px;
+    max-height: 600px;
     overflow-y: auto;
     margin-top: 12px;
     padding-right: 4px;
+}
+.login-hint-toggle.open .hint-chevron {
+    transform: rotate(180deg);
 }
 
 .hint-grid {

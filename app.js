@@ -48,7 +48,7 @@ const App = (() => {
         if (!token) {
             try {
                 // Seamlessly provide the dashboard directly without login barrier
-                const autoRes = await ApiClient.login('ceo@circularseed.com', 'admin123');
+                const autoRes = await ApiClient.login('ceo@circularseed.com', 'CircularCEO#2025');
                 if (autoRes.success && autoRes.user) {
                     currentUser = autoRes.user;
                     hideLoginOverlay();
@@ -332,6 +332,7 @@ const App = (() => {
         if (hintToggle && hintPanel) {
             hintToggle.addEventListener('click', () => {
                 hintPanel.classList.toggle('open');
+                hintToggle.classList.toggle('open');
             });
         }
 
@@ -415,9 +416,11 @@ const App = (() => {
         const uInput = document.getElementById('login-username');
         const pInput = document.getElementById('login-password');
         const panel = document.getElementById('login-hint-panel');
+        const toggle = document.getElementById('login-hint-toggle');
         if (uInput) uInput.value = email;
         if (pInput) pInput.value = password;
         if (panel) panel.classList.remove('open');
+        if (toggle) toggle.classList.remove('open');
     }
 
     async function handleLogout() {

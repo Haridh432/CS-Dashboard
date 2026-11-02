@@ -63,7 +63,60 @@
             </div>
             <div class="login-hint-panel" id="login-hint-panel">
                 <div class="hint-grid" id="hint-grid" style="display: flex; flex-direction: column; gap: 8px;">
-                    <!-- Populated dynamically by App.populateDemoCredentials -->
+                    <!-- CEO Account -->
+                    <div class="hint-card">
+                        <div class="hint-card-header" style="background: #7C3AED; display: flex; justify-content: space-between; align-items: center; padding: 8px 12px;">
+                            <span>CEO</span>
+                            <span style="font-size: 10px; font-weight: normal; opacity: 0.85;">Executive Director</span>
+                        </div>
+                        <div class="hint-card-body" style="padding: 10px 12px; display: flex; flex-direction: column; gap: 6px;">
+                            <div class="hint-field">
+                                <span class="hint-label" style="font-size: 9px; opacity: 0.6;">Email</span>
+                                <span class="hint-value" style="font-size: 12px; font-weight: 600;">ceo@circularseed.com</span>
+                            </div>
+                            <div class="hint-field">
+                                <span class="hint-label" style="font-size: 9px; opacity: 0.6;">Password</span>
+                                <span class="hint-value" style="font-size: 12px; font-weight: 600;">CircularCEO#2025</span>
+                            </div>
+                            <button type="button" class="hint-autofill" onclick="App.autofillCredentials('ceo@circularseed.com', 'CircularCEO#2025')" style="margin-top: 4px; padding: 7px; font-size: 11px; font-weight: 700; background: #7C3AED; color: white; border: none; border-radius: 6px; cursor: pointer;">Autofill CEO Credentials</button>
+                        </div>
+                    </div>
+                    <!-- Customer Account -->
+                    <div class="hint-card">
+                        <div class="hint-card-header" style="background: #047857; display: flex; justify-content: space-between; align-items: center; padding: 8px 12px;">
+                            <span>CUSTOMER</span>
+                            <span style="font-size: 10px; font-weight: normal; opacity: 0.85;">Acme Plastics Plant Manager</span>
+                        </div>
+                        <div class="hint-card-body" style="padding: 10px 12px; display: flex; flex-direction: column; gap: 6px;">
+                            <div class="hint-field">
+                                <span class="hint-label" style="font-size: 9px; opacity: 0.6;">Email</span>
+                                <span class="hint-value" style="font-size: 12px; font-weight: 600;">customer@acme-plastics.com</span>
+                            </div>
+                            <div class="hint-field">
+                                <span class="hint-label" style="font-size: 9px; opacity: 0.6;">Password</span>
+                                <span class="hint-value" style="font-size: 12px; font-weight: 600;">Customer#Acme2025</span>
+                            </div>
+                            <button type="button" class="hint-autofill" onclick="App.autofillCredentials('customer@acme-plastics.com', 'Customer#Acme2025')" style="margin-top: 4px; padding: 7px; font-size: 11px; font-weight: 700; background: #047857; color: white; border: none; border-radius: 6px; cursor: pointer;">Autofill Customer Credentials</button>
+                        </div>
+                    </div>
+                    <!-- Operator Account -->
+                    <div class="hint-card">
+                        <div class="hint-card-header" style="background: #0369A1; display: flex; justify-content: space-between; align-items: center; padding: 8px 12px;">
+                            <span>OPERATOR</span>
+                            <span style="font-size: 10px; font-weight: normal; opacity: 0.85;">Lead Shredder Technician</span>
+                        </div>
+                        <div class="hint-card-body" style="padding: 10px 12px; display: flex; flex-direction: column; gap: 6px;">
+                            <div class="hint-field">
+                                <span class="hint-label" style="font-size: 9px; opacity: 0.6;">Email</span>
+                                <span class="hint-value" style="font-size: 12px; font-weight: 600;">operator@circularseed.com</span>
+                            </div>
+                            <div class="hint-field">
+                                <span class="hint-label" style="font-size: 9px; opacity: 0.6;">Password</span>
+                                <span class="hint-value" style="font-size: 12px; font-weight: 600;">Operator#Flexishred1</span>
+                            </div>
+                            <button type="button" class="hint-autofill" onclick="App.autofillCredentials('operator@circularseed.com', 'Operator#Flexishred1')" style="margin-top: 4px; padding: 7px; font-size: 11px; font-weight: 700; background: #0369A1; color: white; border: none; border-radius: 6px; cursor: pointer;">Autofill Operator Credentials</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -236,16 +289,16 @@
     </div>
 
     <!-- Application Script Architecture -->
-    <script src="api.js?v=4"></script>
-    <script src="components/StatusBadge.js?v=4"></script>
-    <script src="components/MachineCard.js?v=4"></script>
-    <script src="components/TelemetryChart.js?v=4"></script>
-    <script src="components/FleetOverview.js?v=4"></script>
-    <script src="components/CustomerView.js?v=4"></script>
-    <script src="components/OperatorView.js?v=4"></script>
-    <script src="components/MachineDetail.js?v=4"></script>
-    <script src="websocket.js?v=4"></script>
-    <script src="app.js?v=4"></script>
+    <script src="api.js?v=5"></script>
+    <script src="components/StatusBadge.js?v=5"></script>
+    <script src="components/MachineCard.js?v=5"></script>
+    <script src="components/TelemetryChart.js?v=5"></script>
+    <script src="components/FleetOverview.js?v=5"></script>
+    <script src="components/CustomerView.js?v=5"></script>
+    <script src="components/OperatorView.js?v=5"></script>
+    <script src="components/MachineDetail.js?v=5"></script>
+    <script src="websocket.js?v=5"></script>
+    <script src="app.js?v=5"></script>
 </body>
 
 </html>
