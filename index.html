@@ -4,107 +4,250 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CircularSeed Dashboard</title>
-    <link rel="stylesheet" href="style.css">
+    <title>CircularSeed FLEXISHRED-DC &bull; Machine Monitoring Platform</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=2">
 </head>
 
 <body>
-    <header class="header">
-        <div class="logo">
-            <h1>CircularSeed</h1>
-            <span class="subtitle">Plastic Shredder</span>
-        </div>
-        <div class="header-status">
-            <div class="status-indicator">
-                <span class="status-dot" id="conn-dot"></span>
-                <span id="conn-status">DEMO</span>
+
+    <!-- ============================================================ -->
+    <!-- LOGIN SCREEN OVERLAY                                         -->
+    <!-- ============================================================ -->
+    <div class="login-overlay hidden" id="login-overlay" style="display: none;">
+        <div class="login-card">
+            <!-- Login Logo -->
+            <div class="login-logo">
+                <img src="logo.png" alt="CircularSeed Logo" class="login-logo-img">
+                <div>
+                    <div class="login-brand">CircularSeed</div>
+                    <div class="login-subtitle">FLEXISHRED-DC &bull; Machine Monitoring</div>
+                </div>
             </div>
-            <div class="machine-state" id="header-machine-state">RUNNING</div>
+
+            <!-- Login Form -->
+            <form class="login-form" id="login-form" autocomplete="off">
+                <div class="login-field">
+                    <label for="login-username">Email Address</label>
+                    <div class="login-input-wrap">
+                        <svg class="login-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,12 2,6"/></svg>
+                        <input type="email" id="login-username" class="login-input" placeholder="name@circularseed.com" autocomplete="username" required>
+                    </div>
+                </div>
+                <div class="login-field">
+                    <label for="login-password">Password</label>
+                    <div class="login-input-wrap">
+                        <svg class="login-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        <input type="password" id="login-password" class="login-input" placeholder="Enter your password" autocomplete="current-password" required>
+                        <button type="button" class="login-eye" id="login-toggle-pw" title="Toggle password visibility">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Error Message -->
+                <div class="login-error" id="login-error"></div>
+
+                <button type="submit" class="login-btn" id="login-submit-btn">
+                    <span id="login-btn-text">Sign In</span>
+                    <div class="login-spinner" id="login-spinner" style="display: none;"></div>
+                </button>
+            </form>
+
+            <!-- Role Credentials Hint Panel -->
+            <div class="login-hint-toggle" id="login-hint-toggle">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                Demo Accounts &bull; Click to Autofill
+                <svg class="hint-chevron" id="hint-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="login-hint-panel" id="login-hint-panel">
+                <div class="hint-grid" id="hint-grid" style="display: flex; flex-direction: column; gap: 8px;">
+                    <!-- Populated dynamically by App.populateDemoCredentials -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Background decorative elements -->
+        <div class="login-bg-orb orb-1"></div>
+        <div class="login-bg-orb orb-2"></div>
+        <div class="login-bg-orb orb-3"></div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TOP HEADER                                                   -->
+    <!-- ============================================================ -->
+    <header class="header">
+        <div class="logo-container" onclick="App.navigateBack()" style="cursor: pointer;">
+            <img src="logo.png" alt="CircularSeed Logo" class="logo-img">
+            <div class="logo-text">
+                <h1>CircularSeed</h1>
+                <span class="subtitle">FLEXISHRED-DC &bull; Machine Monitoring</span>
+            </div>
+        </div>
+
+        <div class="header-meta">
+            <!-- Connection Status -->
+            <div class="indicator-pill" id="conn-pill" title="Gateway Connection Status">
+                <span class="status-dot dot-connected" id="conn-dot"></span>
+                <span id="conn-status">ONLINE</span>
+            </div>
+
+            <!-- User Info Pill -->
+            <div class="user-pill" id="user-pill">
+                <div class="user-avatar" id="user-avatar">--</div>
+                <div class="user-info">
+                    <span class="user-name" id="user-name">Not Logged In</span>
+                    <span class="user-role-badge" id="user-role-badge">--</span>
+                </div>
+            </div>
+
+            <!-- Gateway Settings Button -->
+            <button class="header-btn" id="btn-settings" title="Configure Gateway Settings">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+                SETTINGS
+            </button>
+
+            <!-- Logout Button -->
+            <button class="header-btn btn-logout" id="btn-logout" title="Sign Out">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <polyline points="16 17 21 12 16 7"/>
+                    <line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+                LOGOUT
+            </button>
         </div>
     </header>
 
-    <main class="dashboard-grid">
-        <!-- Main machine status card -->
-        <section class="card">
-            <h2>Machine Status</h2>
-            <div class="data-row">
-                <span>State</span>
-                <strong id="m-state" class="status-running">RUNNING</strong>
-            </div>
-            <div class="data-row">
-                <span>Run ID</span>
-                <strong id="m-runid">--</strong>
-            </div>
-            <div class="data-row">
-                <span>Runtime</span>
-                <strong id="m-runtime">00:00:00</strong>
-            </div>
-            <div class="controls-grid" style="margin-top: 20px;">
-                <button class="btn btn-start" onclick="sendCommand('START')">START</button>
-                <button class="btn btn-stop" onclick="sendCommand('STOP')">STOP</button>
-            </div>
-        </section>
-
-        <!-- DC POWER card -->
-        <section class="card">
-            <h2>DC Power</h2>
-            <div class="data-row">
-                <span>Voltage</span>
-                <strong id="p-volt">0.0 V</strong>
-            </div>
-            <div class="data-row">
-                <span>Current</span>
-                <strong id="p-curr">0.0 A</strong>
-            </div>
-            <div class="data-row">
-                <span>Power</span>
-                <strong id="p-power">0 W</strong>
-            </div>
-            <div class="data-row">
-                <span>Energy</span>
-                <strong id="p-energy">0.00 kWh</strong>
-            </div>
-        </section>
-
-        <!-- MOTOR card -->
-        <section class="card">
-            <h2>Motor 1</h2>
-            <div class="data-row">
-                <span>Temperature</span>
-                <strong id="mo-temp">0 &deg;C</strong>
-            </div>
-            
-            <h2 style="margin-top: 20px;">Motor 2</h2>
-            <div class="data-row">
-                <span>Temperature</span>
-                <strong id="mo2-temp">0 &deg;C</strong>
-            </div>
-        </section>
-
-        <!-- BATTERY card -->
-        <section class="card">
-            <h2>Battery</h2>
-            <div class="data-row">
-                <span>Voltage</span>
-                <strong id="b-volt">0.0 V</strong>
-            </div>
-            <div class="data-row">
-                <span>SOC</span>
-                <strong id="b-soc">0 %</strong>
-            </div>
-            <div class="data-row">
-                <span>Current</span>
-                <strong id="b-curr">0.0 A</strong>
-            </div>
-            <div class="data-row">
-                <span>Status</span>
-                <strong id="b-status">--</strong>
-            </div>
-        </section>
-
+    <!-- ============================================================ -->
+    <!-- DYNAMIC MAIN CONTENT MOUNT (CEO / Customer / Operator / Detail) -->
+    <!-- ============================================================ -->
+    <main id="main-content-mount">
+        <!-- Rendered by App router -->
     </main>
 
-    <script src="app.js"></script>
+    <!-- ============================================================ -->
+    <!-- SETTINGS MODAL                                               -->
+    <!-- ============================================================ -->
+    <div class="modal-overlay" id="settings-modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Gateway Configuration</h3>
+                <button class="modal-close" id="btn-close-settings">&times;</button>
+            </div>
+            <div class="form-group">
+                <label for="settings-input-url">WebSocket Endpoint URL</label>
+                <input type="text" id="settings-input-url" class="form-input" placeholder="ws://localhost:3000/ws">
+                <p class="form-help">Enter backend server WebSocket URL or direct ESP32 address (e.g. <code>ws://192.168.4.1/ws</code> or <code>ws://flexishred.local/ws</code>).</p>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-primary" id="btn-save-settings">Save &amp; Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- CONFIRMATION MODAL                                           -->
+    <!-- ============================================================ -->
+    <div class="modal-overlay" id="confirm-modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="confirm-modal-title">Confirm Action</h3>
+            </div>
+            <p id="confirm-modal-message" style="margin-bottom: 20px; font-size: 14px; line-height: 1.5; color: var(--color-text-main);"></p>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="btn-confirm-no">Cancel</button>
+                <button class="btn btn-danger" id="btn-confirm-yes">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- REGISTER / ADD MACHINE MODAL                                 -->
+    <!-- ============================================================ -->
+    <div class="modal-overlay" id="add-machine-modal" style="display: none;">
+        <div class="modal-content modal-content-lg">
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div class="modal-header-icon">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                    </div>
+                    <h3>Register New Machine</h3>
+                </div>
+                <button class="modal-close" id="btn-close-add-machine">&times;</button>
+            </div>
+            <form id="add-machine-form" autocomplete="off">
+                <div class="form-row">
+                    <div class="form-group flex-1">
+                        <label for="new-machine-id">Machine Identifier</label>
+                        <input type="text" id="new-machine-id" class="form-input" placeholder="e.g. CS-FS-0007" required>
+                        <p class="form-help">Unique fleet serial designation</p>
+                    </div>
+                    <div class="form-group flex-1">
+                        <label for="new-machine-model">Model Series</label>
+                        <select id="new-machine-model" class="form-input">
+                            <option value="FLEXISHRED-DC Pro">FLEXISHRED-DC Pro (48V Dual BLDC)</option>
+                            <option value="FLEXISHRED-DC Std">FLEXISHRED-DC Std (48V Dual BLDC)</option>
+                            <option value="FLEXISHRED-DC Micro (12V L298N Prototype)">FLEXISHRED-DC Micro (12V L298N Prototype)</option>
+                        </select>
+                        <p class="form-help">Drives motor &amp; voltage profile</p>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group flex-1" id="add-machine-org-group">
+                        <label for="new-machine-org">Assigned Customer / Deployment</label>
+                        <select id="new-machine-org" class="form-input"></select>
+                        <p class="form-help">Tenant organization assignment</p>
+                    </div>
+                    <div class="form-group flex-1">
+                        <label for="new-machine-state">Initial State</label>
+                        <select id="new-machine-state" class="form-input">
+                            <option value="READY">READY (Ready to operate)</option>
+                            <option value="STOPPED">STOPPED (Idle)</option>
+                            <option value="RUNNING">RUNNING (Active test run)</option>
+                            <option value="OFFLINE">OFFLINE (Commissioning pending)</option>
+                        </select>
+                        <p class="form-help">Initial operating status</p>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="new-machine-location">Operating Location / Floor Bay</label>
+                    <input type="text" id="new-machine-location" class="form-input" placeholder="e.g. Processing Floor - Bay C (Line 2 Primary Regrind)" required>
+                    <p class="form-help">Facility bay or testing bench location</p>
+                </div>
+
+                <div id="add-machine-error" class="login-error" style="margin-bottom: 14px; display: none;"></div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="btn-cancel-add-machine">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="btn-submit-add-machine">
+                        <span id="add-machine-btn-text">Register Machine</span>
+                        <div class="login-spinner" id="add-machine-spinner" style="display: none; width: 14px; height: 14px; border-width: 2px;"></div>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Application Script Architecture -->
+    <script src="api.js?v=4"></script>
+    <script src="protocol.js?v=4"></script>
+    <script src="config.js?v=4"></script>
+    <script src="components/StatusBadge.js?v=4"></script>
+    <script src="components/MachineCard.js?v=4"></script>
+    <script src="components/TelemetryChart.js?v=4"></script>
+    <script src="components/FleetOverview.js?v=4"></script>
+    <script src="components/CustomerView.js?v=4"></script>
+    <script src="components/OperatorView.js?v=4"></script>
+    <script src="components/MachineDetail.js?v=4"></script>
+    <script src="websocket.js?v=4"></script>
+    <script src="app.js?v=4"></script>
 </body>
 
 </html>

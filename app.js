@@ -1,311 +1,675 @@
 /**
- * CircularSeed Dashboard Application
+ * CircularSeed Multi-Machine Monitoring Platform
+ * Master Application Controller & Client-Side Router
  */
 
-const USE_MOCK_DATA = true;
-const REALTIME_MODE = false;
+const App = (() => {
+    let currentUser = null;
+    let wsClient = null;
+    let currentRoute = '';
+    let currentMachineId = null;
+    let confirmCallback = null;
 
-// Mock data generator state
-let mockDataInterval;
-let currentMockData = {
-    machine: {
-        state: "RUNNING",
-        runId: "CS-000124",
-        runtime: 222
-    },
-    power: {
-        voltage: 48.2,
-        current: 12.4,
-        power: 598,
-        energy: 1.82
-    },
-    motor: {
-        rpm: 850,
-        temperature: 48,
-        current: 12.4,
-        load: 64
-    },
-    battery: {
-        voltage: 51.2,
-        soc: 78,
-        current: 12.4,
-        status: "DISCHARGING"
-    },
-    processing: {
-        material: "Mixed Plastic",
-        inputWeight: 5.0,
-        processedWeight: 4.2,
-        processingTime: 222,
-        throughput: 14.2,
-        outputSize: 10
-    },
-    safety: {
-        emergencyStop: "NORMAL",
-        jam: "NORMAL",
-        thermal: "NORMAL",
-        interlock: "NORMAL",
-        batteryProtection: "NORMAL",
-        activeFault: "NONE"
-    },
-    solar: {
-        connected: false,
-        voltage: 0,
-        current: 0,
-        power: 0
-    }
-};
+    // View Mount container in DOM
+    let mainMount = null;
 
-/**
- * Main function to update UI.
- * All UI updates must go through this function.
- * @param {Object} data 
- */
-function updateMachineData(data) {
-    // 1. Header & Machine Status
-    const headerState = document.getElementById('header-machine-state');
-    const mState = document.getElementById('m-state');
-    
-    headerState.textContent = data.machine.state;
-    mState.textContent = data.machine.state;
-    
-    // Update colors based on state
-    headerState.style.backgroundColor = getStateColor(data.machine.state);
-    mState.style.color = getStateColor(data.machine.state);
-    
-    document.getElementById('m-runid').textContent = data.machine.runId;
-    document.getElementById('m-runtime').textContent = formatTime(data.machine.runtime);
+    function init() {
+        mainMount = document.getElementById('main-content-mount');
+        wsClient = new GatewayWebSocketClient();
 
-    // 2. DC Power
-    document.getElementById('p-volt').textContent = `${data.power.voltage.toFixed(1)} V`;
-    document.getElementById('p-curr').textContent = `${data.power.current.toFixed(1)} A`;
-    document.getElementById('p-power').textContent = `${Math.round(data.power.power)} W`;
-    document.getElementById('p-energy').textContent = `${data.power.energy.toFixed(2)} kWh`;
+        setupHeaderEvents();
+        setupAuthEvents();
+        setupAddMachineModal();
+        setupGlobalRouting();
+        populateDemoCredentials();
 
-    // 3. Motor
-    document.getElementById('mo-rpm').textContent = Math.round(data.motor.rpm);
-    document.getElementById('mo-temp').textContent = `${Math.round(data.motor.temperature)} °C`;
-    document.getElementById('mo-curr').textContent = `${data.motor.current.toFixed(1)} A`;
-    document.getElementById('mo-load').textContent = `${Math.round(data.motor.load)} %`;
+        // WebSocket Status Handlers
+        wsClient.onStatusChange = (status, detail) => {
+            updateHeaderConnectionStatus(status, detail);
+        };
 
-    // 4. Battery
-    document.getElementById('b-volt').textContent = `${data.battery.voltage.toFixed(1)} V`;
-    document.getElementById('b-soc').textContent = `${Math.round(data.battery.soc)} %`;
-    document.getElementById('b-curr').textContent = `${data.battery.current.toFixed(1)} A`;
-    document.getElementById('b-status').textContent = data.battery.status;
+        wsClient.onTelemetry = (packet) => {
+            if (typeof MachineDetail !== 'undefined' && MachineDetail && typeof MachineDetail.updateLiveTelemetry === 'function') {
+                MachineDetail.updateLiveTelemetry(packet);
+            }
+        };
 
-    // 5. Processing
-    document.getElementById('pr-material').textContent = data.processing.material;
-    document.getElementById('pr-input').textContent = `${data.processing.inputWeight.toFixed(1)} kg`;
-    document.getElementById('pr-processed').textContent = `${data.processing.processedWeight.toFixed(1)} kg`;
-    document.getElementById('pr-time').textContent = formatTime(data.processing.processingTime);
-    document.getElementById('pr-throughput').textContent = `${data.processing.throughput.toFixed(1)} kg/h`;
-    document.getElementById('pr-size').textContent = `${data.processing.outputSize} mm`;
+        // Global auth expired event
+        window.addEventListener('auth:expired', () => {
+            handleLogout();
+        });
 
-    // 6. Safety / Fault
-    updateSafetyIndicator('s-estop', data.safety.emergencyStop);
-    updateSafetyIndicator('s-jam', data.safety.jam);
-    updateSafetyIndicator('s-therm', data.safety.thermal);
-    updateSafetyIndicator('s-interlock', data.safety.interlock);
-    updateSafetyIndicator('s-batt', data.safety.batteryProtection);
-    
-    const faultEl = document.getElementById('s-fault');
-    faultEl.textContent = data.safety.activeFault;
-    if (data.safety.activeFault !== "NONE") {
-        faultEl.style.color = "var(--color-fault)";
-    } else {
-        faultEl.style.color = "var(--text-main)";
+        // Check active session
+        checkSession();
     }
 
-    // 7. Optional Solar
-    const solarBadge = document.getElementById('so-conn-badge');
-    if (data.solar.connected) {
-        solarBadge.textContent = "Connected";
-        solarBadge.style.backgroundColor = "var(--color-normal)";
-        solarBadge.style.color = "white";
-        document.getElementById('so-volt').textContent = `${data.solar.voltage.toFixed(1)} V`;
-        document.getElementById('so-curr').textContent = `${data.solar.current.toFixed(1)} A`;
-        document.getElementById('so-power').textContent = `${Math.round(data.solar.power)} W`;
-    } else {
-        solarBadge.textContent = "Not Connected";
-        solarBadge.style.backgroundColor = "var(--border-color)";
-        solarBadge.style.color = "var(--text-muted)";
-        document.getElementById('so-volt').textContent = "-- V";
-        document.getElementById('so-curr').textContent = "-- A";
-        document.getElementById('so-power').textContent = "-- W";
-    }
-}
-
-/**
- * Utility: Format seconds into HH:MM:SS
- */
-function formatTime(totalSeconds) {
-    const h = Math.floor(totalSeconds / 3600);
-    const m = Math.floor((totalSeconds % 3600) / 60);
-    const s = totalSeconds % 60;
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-}
-
-/**
- * Utility: Get color variable based on state
- */
-function getStateColor(state) {
-    switch (state) {
-        case 'RUNNING': return 'var(--color-running)';
-        case 'IDLE': return 'var(--color-idle)';
-        case 'STOPPED': return 'var(--color-stopped)';
-        case 'FAULT':
-        case 'JAM':
-        case 'EMERGENCY STOP': return 'var(--color-fault)';
-        default: return 'var(--text-muted)';
-    }
-}
-
-/**
- * Utility: Update safety indicator text and color
- */
-function updateSafetyIndicator(id, status) {
-    const el = document.getElementById(id);
-    el.textContent = status;
-    el.className = ''; // reset classes
-    if (status === 'NORMAL') {
-        el.classList.add('status-normal');
-    } else if (status === 'WARNING') {
-        el.classList.add('status-warning');
-    } else {
-        el.classList.add('status-fault');
-    }
-}
-
-/**
- * Frontend command sending.
- * The frontend only sends commands. STM32 validates safety.
- * @param {string} cmd 
- */
-function sendCommand(cmd) {
-    console.log(`Command sent: ${cmd}`);
-    
-    if (REALTIME_MODE) {
-        // Future WebSocket implementation
-        /*
-        if (socket && socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({ type: 'command', command: cmd }));
-        }
-        */
-    } else if (USE_MOCK_DATA) {
-        // Simulate local command effect for demonstration
-        if (cmd === 'START') currentMockData.machine.state = 'RUNNING';
-        if (cmd === 'STOP') currentMockData.machine.state = 'STOPPED';
-        if (cmd === 'REVERSE') currentMockData.machine.state = 'IDLE'; // e.g. reversing state
-        if (cmd === 'RESET_FAULT') currentMockData.safety.activeFault = 'NONE';
-        
-        updateMachineData(currentMockData);
-    }
-}
-
-/**
- * Update Connection Status Indicator
- */
-function updateConnectionStatus(status) {
-    const dot = document.getElementById('conn-dot');
-    const text = document.getElementById('conn-status');
-    
-    text.textContent = status;
-    
-    switch (status) {
-        case 'DEMO':
-            dot.style.backgroundColor = 'var(--color-warning)';
-            break;
-        case 'CONNECTING':
-            dot.style.backgroundColor = 'var(--color-warning)';
-            break;
-        case 'CONNECTED':
-            dot.style.backgroundColor = 'var(--color-normal)';
-            break;
-        case 'DISCONNECTED':
-            dot.style.backgroundColor = 'var(--color-fault)';
-            break;
-    }
-}
-
-/**
- * Mock Data Generator
- */
-function startMockData() {
-    updateConnectionStatus('DEMO');
-    
-    mockDataInterval = setInterval(() => {
-        if (currentMockData.machine.state === 'RUNNING') {
-            currentMockData.machine.runtime += 1;
-            currentMockData.processing.processingTime += 1;
-            
-            // Randomly vary values slightly
-            currentMockData.motor.rpm = 850 + (Math.random() * 20 - 10);
-            currentMockData.motor.current = 12.4 + (Math.random() * 0.4 - 0.2);
-            currentMockData.motor.temperature = 48 + (Math.random() * 1 - 0.5);
-            currentMockData.motor.load = 64 + (Math.random() * 4 - 2);
-            
-            currentMockData.power.voltage = 48.2 + (Math.random() * 0.5 - 0.25);
-            currentMockData.power.current = currentMockData.motor.current;
-            currentMockData.power.power = currentMockData.power.voltage * currentMockData.power.current;
-            currentMockData.power.energy += (currentMockData.power.power / 3600000); // rough conversion to kWh per sec
-            
-            currentMockData.processing.processedWeight += (14.2 / 3600);
-        } else {
-            currentMockData.motor.rpm = 0;
-            currentMockData.motor.current = 0;
-            currentMockData.motor.load = 0;
-            currentMockData.power.current = 0;
-            currentMockData.power.power = 0;
+    async function checkSession() {
+        const token = ApiClient.getToken();
+        if (!token) {
+            try {
+                // Seamlessly provide the dashboard directly without login barrier
+                const autoRes = await ApiClient.login('ceo@circularseed.com', 'admin123');
+                if (autoRes.success && autoRes.user) {
+                    currentUser = autoRes.user;
+                    hideLoginOverlay();
+                    updateHeaderUserProfile();
+                    wsClient.connect();
+                    routeInitialView();
+                    return;
+                }
+            } catch (err) {
+                showLoginOverlay();
+                return;
+            }
         }
 
-        updateMachineData(currentMockData);
-    }, 1000);
-}
-
-/**
- * Future WebSocket Connection
- */
-let socket;
-function connectRealtime() {
-    updateConnectionStatus('CONNECTING');
-    
-    socket = new WebSocket('ws://localhost:8080');
-    
-    socket.onopen = () => {
-        console.log('WebSocket Connected');
-        updateConnectionStatus('CONNECTED');
-    };
-    
-    socket.onmessage = (event) => {
         try {
-            const message = JSON.parse(event.data);
-            if (message.type === "machine_update") {
-                updateMachineData(message.data);
+            const res = await ApiClient.getCurrentUser();
+            if (res.success && res.user) {
+                currentUser = res.user;
+                hideLoginOverlay();
+                updateHeaderUserProfile();
+                wsClient.connect();
+                routeInitialView();
+            } else {
+                // Try seamless auto-login before falling back to login screen
+                const autoRes = await ApiClient.login('ceo@circularseed.com', 'admin123');
+                if (autoRes.success && autoRes.user) {
+                    currentUser = autoRes.user;
+                    hideLoginOverlay();
+                    updateHeaderUserProfile();
+                    wsClient.connect();
+                    routeInitialView();
+                } else {
+                    showLoginOverlay();
+                }
+            }
+        } catch (err) {
+            ApiClient.clearToken();
+            try {
+                const autoRes = await ApiClient.login('ceo@circularseed.com', 'admin123');
+                if (autoRes.success && autoRes.user) {
+                    currentUser = autoRes.user;
+                    hideLoginOverlay();
+                    updateHeaderUserProfile();
+                    wsClient.connect();
+                    routeInitialView();
+                    return;
+                }
+            } catch (e) {
+                showLoginOverlay();
+            }
+        }
+    }
+
+    function routeInitialView() {
+        const path = window.location.pathname;
+        const hash = window.location.hash;
+
+        // Check if explicit path was requested
+        if (hash.startsWith('#/machines/')) {
+            const mId = hash.replace('#/machines/', '');
+            navigateToMachine(mId, false);
+            return;
+        }
+        if (path.startsWith('/machines/')) {
+            const mId = path.replace('/machines/', '');
+            navigateToMachine(mId, false);
+            return;
+        }
+
+        // Role default routing
+        if (currentUser.role === 'CEO') {
+            navigateTo('/ceo/dashboard');
+        } else if (currentUser.role === 'CUSTOMER') {
+            navigateTo('/customer/dashboard');
+        } else if (currentUser.role === 'OPERATOR') {
+            navigateTo('/operator/dashboard');
+        }
+    }
+
+    function setupGlobalRouting() {
+        window.addEventListener('popstate', (e) => {
+            if (e.state && e.state.route) {
+                renderRoute(e.state.route, e.state.params, false);
+            } else {
+                routeInitialView();
+            }
+        });
+    }
+
+    function navigateTo(route, params = {}, pushState = true) {
+        currentRoute = route;
+        if (pushState) {
+            window.history.pushState({ route, params }, '', route);
+        }
+        renderRoute(route, params);
+    }
+
+    function navigateToMachine(machineId, pushState = true) {
+        currentMachineId = machineId;
+        const url = `/machines/${machineId}`;
+        if (pushState) {
+            window.history.pushState({ route: 'machine_detail', params: { machineId } }, '', url);
+        }
+        renderRoute('machine_detail', { machineId });
+    }
+
+    function navigateBack() {
+        if (currentUser.role === 'CEO') {
+            navigateTo('/ceo/dashboard');
+        } else if (currentUser.role === 'CUSTOMER') {
+            navigateTo('/customer/dashboard');
+        } else if (currentUser.role === 'OPERATOR') {
+            navigateTo('/operator/dashboard');
+        } else {
+            window.history.back();
+        }
+    }
+
+    async function renderRoute(route, params = {}) {
+        if (!mainMount) return;
+
+        // Unsubscribe from machine if leaving detail
+        if (route !== 'machine_detail' && currentMachineId) {
+            wsClient.unsubscribeMachine(currentMachineId);
+            currentMachineId = null;
+        }
+
+        if (route === '/ceo/dashboard' || (route === 'default' && currentUser.role === 'CEO')) {
+            if (currentUser.role !== 'CEO') {
+                return navigateBack();
+            }
+            mainMount.innerHTML = `<div class="detail-loading"><div class="login-spinner"></div><p>Loading manufactured fleet...</p></div>`;
+            try {
+                const [machinesRes, summaryRes] = await Promise.all([
+                    ApiClient.getMachines(),
+                    ApiClient.getSummary()
+                ]);
+                FleetOverview.render(mainMount, {
+                    machines: machinesRes.machines,
+                    summary: summaryRes.summary
+                });
+                wsClient.subscribeFleet();
+            } catch (err) {
+                mainMount.innerHTML = `<div class="empty-filter-state"><p>Error loading fleet: ${err.message}</p></div>`;
+            }
+            return;
+        }
+
+        if (route === '/customer/dashboard' || (route === 'default' && currentUser.role === 'CUSTOMER')) {
+            mainMount.innerHTML = `<div class="detail-loading"><div class="login-spinner"></div><p>Loading assigned machines...</p></div>`;
+            try {
+                const [machinesRes, summaryRes] = await Promise.all([
+                    ApiClient.getMachines(),
+                    ApiClient.getSummary()
+                ]);
+                CustomerView.render(mainMount, {
+                    machines: machinesRes.machines,
+                    summary: summaryRes.summary,
+                    user: currentUser
+                });
+                wsClient.subscribeFleet();
+            } catch (err) {
+                mainMount.innerHTML = `<div class="empty-filter-state"><p>Error loading customer machines: ${err.message}</p></div>`;
+            }
+            return;
+        }
+
+        if (route === '/operator/dashboard' || (route === 'default' && currentUser.role === 'OPERATOR')) {
+            mainMount.innerHTML = `<div class="detail-loading"><div class="login-spinner"></div><p>Loading operator workspace...</p></div>`;
+            try {
+                const machinesRes = await ApiClient.getMachines();
+                OperatorView.render(mainMount, {
+                    machines: machinesRes.machines,
+                    user: currentUser
+                });
+            } catch (err) {
+                mainMount.innerHTML = `<div class="empty-filter-state"><p>Error loading operator view: ${err.message}</p></div>`;
+            }
+            return;
+        }
+
+        if (route === 'machine_detail') {
+            const machineId = params.machineId || currentMachineId;
+            currentMachineId = machineId;
+            if (wsClient) {
+                wsClient.subscribeMachine(machineId);
+            }
+            MachineDetail.loadAndRender(mainMount, machineId);
+            return;
+        }
+    }
+
+    function refreshCurrentView() {
+        if (currentMachineId) {
+            MachineDetail.loadAndRender(mainMount, currentMachineId);
+        } else {
+            renderRoute(currentRoute || '/');
+        }
+    }
+
+    // Header Updates
+    function updateHeaderUserProfile() {
+        if (!currentUser) return;
+        const avatarEl = document.getElementById('user-avatar');
+        const nameEl = document.getElementById('user-name');
+        const roleBadgeEl = document.getElementById('user-role-badge');
+        const userPill = document.getElementById('user-pill');
+
+        if (avatarEl) avatarEl.textContent = currentUser.avatar || currentUser.role.substring(0, 2);
+        if (nameEl) nameEl.textContent = currentUser.name;
+        if (roleBadgeEl) {
+            roleBadgeEl.textContent = currentUser.role;
+            roleBadgeEl.className = `user-role-badge role-badge-${currentUser.role.toLowerCase()}`;
+        }
+        if (userPill) userPill.style.display = 'flex';
+    }
+
+    function updateHeaderConnectionStatus(status, detail) {
+        const dot = document.getElementById('conn-dot');
+        const text = document.getElementById('conn-status');
+        if (!dot || !text) return;
+
+        switch (status) {
+            case 'CONNECTED':
+                dot.className = 'status-dot dot-connected';
+                text.textContent = 'ONLINE';
+                break;
+            case 'CONNECTING':
+                dot.className = 'status-dot dot-stale';
+                text.textContent = 'CONNECTING';
+                break;
+            case 'STALE':
+                dot.className = 'status-dot dot-stale';
+                text.textContent = 'STALE';
+                break;
+            case 'DISCONNECTED':
+            default:
+                dot.className = 'status-dot dot-disconnected';
+                text.textContent = 'OFFLINE';
+        }
+    }
+
+    // Authentication UI
+    function showLoginOverlay() {
+        const overlay = document.getElementById('login-overlay');
+        if (overlay) {
+            overlay.style.display = 'flex';
+            overlay.classList.remove('hidden');
+        }
+    }
+
+    function hideLoginOverlay() {
+        const overlay = document.getElementById('login-overlay');
+        if (overlay) {
+            overlay.classList.add('hidden');
+            setTimeout(() => {
+                overlay.style.display = 'none';
+            }, 400);
+        }
+    }
+
+    function setupAuthEvents() {
+        const form = document.getElementById('login-form');
+        const emailInput = document.getElementById('login-username');
+        const passwordInput = document.getElementById('login-password');
+        const errorEl = document.getElementById('login-error');
+        const btnText = document.getElementById('login-btn-text');
+        const spinner = document.getElementById('login-spinner');
+        const togglePw = document.getElementById('login-toggle-pw');
+        const hintToggle = document.getElementById('login-hint-toggle');
+        const hintPanel = document.getElementById('login-hint-panel');
+        const btnLogout = document.getElementById('btn-logout');
+
+        if (togglePw && passwordInput) {
+            togglePw.addEventListener('click', () => {
+                const isPw = passwordInput.type === 'password';
+                passwordInput.type = isPw ? 'text' : 'password';
+            });
+        }
+
+        if (hintToggle && hintPanel) {
+            hintToggle.addEventListener('click', () => {
+                hintPanel.classList.toggle('open');
+            });
+        }
+
+        if (btnLogout) {
+            btnLogout.addEventListener('click', handleLogout);
+        }
+
+        if (form) {
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                errorEl.textContent = '';
+                btnText.textContent = 'Signing In...';
+                spinner.style.display = 'block';
+
+                const email = emailInput.value.trim();
+                const password = passwordInput.value;
+
+                try {
+                    const res = await ApiClient.login(email, password, true);
+                    if (res.success && res.user) {
+                        currentUser = res.user;
+                        hideLoginOverlay();
+                        updateHeaderUserProfile();
+                        wsClient.connect();
+                        routeInitialView();
+                    } else {
+                        errorEl.textContent = res.error || 'Invalid credentials.';
+                    }
+                } catch (err) {
+                    errorEl.textContent = err.message || 'Login failed. Please verify credentials.';
+                } finally {
+                    btnText.textContent = 'Sign In';
+                    spinner.style.display = 'none';
+                }
+            });
+        }
+    }
+
+    async function populateDemoCredentials() {
+        const grid = document.getElementById('hint-grid');
+        if (!grid) return;
+
+        try {
+            const res = await ApiClient.getDemoCredentials();
+            const creds = res.credentials || [];
+
+            const roleColors = {
+                CEO: '#7C3AED',
+                CUSTOMER: '#047857',
+                OPERATOR: '#0369A1'
+            };
+
+            grid.innerHTML = creds.map(c => `
+                <div class="hint-card">
+                    <div class="hint-card-header" style="background: ${roleColors[c.role] || '#374151'}">
+                        <span>${c.role}</span>
+                        <span style="font-size: 10px; font-weight: normal; opacity: 0.85;">${c.title}</span>
+                    </div>
+                    <div class="hint-card-body">
+                        <div class="hint-field">
+                            <span class="hint-label">Email</span>
+                            <span class="hint-value">${c.email}</span>
+                        </div>
+                        <div class="hint-field">
+                            <span class="hint-label">Password</span>
+                            <span class="hint-value">${c.password}</span>
+                        </div>
+                        <p style="font-size: 10px; color: rgba(255,255,255,0.5); margin: 6px 0;">${c.desc}</p>
+                        <button class="hint-autofill" onclick="App.autofillCredentials('${c.email}', '${c.password}')">
+                            Use these credentials
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        } catch (e) {
+            console.warn('Failed to load demo credentials:', e);
+        }
+    }
+
+    function autofillCredentials(email, password) {
+        const uInput = document.getElementById('login-username');
+        const pInput = document.getElementById('login-password');
+        const panel = document.getElementById('login-hint-panel');
+        if (uInput) uInput.value = email;
+        if (pInput) pInput.value = password;
+        if (panel) panel.classList.remove('open');
+    }
+
+    async function handleLogout() {
+        await ApiClient.logout();
+        currentUser = null;
+        if (wsClient) wsClient.disconnect();
+        showLoginOverlay();
+        const userPill = document.getElementById('user-pill');
+        if (userPill) userPill.style.display = 'none';
+    }
+
+    // Modal Confirmation Dialog
+    function setupHeaderEvents() {
+        const modal = document.getElementById('confirm-modal');
+        const btnYes = document.getElementById('btn-confirm-yes');
+        const btnNo = document.getElementById('btn-confirm-no');
+        const btnSettings = document.getElementById('btn-settings');
+        const settingsModal = document.getElementById('settings-modal');
+        const btnCloseSettings = document.getElementById('btn-close-settings');
+        const btnSaveSettings = document.getElementById('btn-save-settings');
+
+        if (btnYes) {
+            btnYes.addEventListener('click', () => {
+                if (modal) modal.style.display = 'none';
+                if (typeof confirmCallback === 'function') {
+                    confirmCallback();
+                    confirmCallback = null;
+                }
+            });
+        }
+
+        if (btnNo) {
+            btnNo.addEventListener('click', () => {
+                if (modal) modal.style.display = 'none';
+                confirmCallback = null;
+            });
+        }
+
+        if (btnSettings && settingsModal) {
+            btnSettings.addEventListener('click', () => {
+                settingsModal.style.display = 'flex';
+            });
+        }
+
+        if (btnCloseSettings && settingsModal) {
+            btnCloseSettings.addEventListener('click', () => {
+                settingsModal.style.display = 'none';
+            });
+        }
+
+        if (btnSaveSettings && settingsModal) {
+            btnSaveSettings.addEventListener('click', () => {
+                const urlInput = document.getElementById('settings-input-url');
+                if (urlInput && urlInput.value) {
+                    wsClient.disconnect();
+                    wsClient.connect(urlInput.value.trim());
+                }
+                settingsModal.style.display = 'none';
+            });
+        }
+    }
+
+    function showConfirmModal(title, message, onConfirm) {
+        const modal = document.getElementById('confirm-modal');
+        const titleEl = document.getElementById('confirm-modal-title');
+        const msgEl = document.getElementById('confirm-modal-message');
+
+        if (titleEl) titleEl.textContent = title;
+        if (msgEl) msgEl.textContent = message;
+        confirmCallback = onConfirm;
+
+        if (modal) modal.style.display = 'flex';
+    }
+
+    function setupAddMachineModal() {
+        const modal = document.getElementById('add-machine-modal');
+        const btnClose = document.getElementById('btn-close-add-machine');
+        const btnCancel = document.getElementById('btn-cancel-add-machine');
+        const form = document.getElementById('add-machine-form');
+        const errorEl = document.getElementById('add-machine-error');
+        const spinner = document.getElementById('add-machine-spinner');
+        const btnText = document.getElementById('add-machine-btn-text');
+
+        const closeAddModal = () => {
+            if (modal) modal.style.display = 'none';
+            if (errorEl) {
+                errorEl.textContent = '';
+                errorEl.style.display = 'none';
+            }
+        };
+
+        if (btnClose) btnClose.addEventListener('click', closeAddModal);
+        if (btnCancel) btnCancel.addEventListener('click', closeAddModal);
+
+        if (form) {
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                if (errorEl) {
+                    errorEl.textContent = '';
+                    errorEl.style.display = 'none';
+                }
+                if (spinner) spinner.style.display = 'block';
+                if (btnText) btnText.textContent = 'Registering...';
+
+                const id = document.getElementById('new-machine-id').value.trim();
+                const model = document.getElementById('new-machine-model').value;
+                const orgSelect = document.getElementById('new-machine-org');
+                const organizationId = orgSelect ? orgSelect.value : null;
+                const state = document.getElementById('new-machine-state').value;
+                const location = document.getElementById('new-machine-location').value.trim();
+
+                try {
+                    const res = await ApiClient.addMachine({
+                        id,
+                        model,
+                        organizationId,
+                        state,
+                        location
+                    });
+
+                    if (res.success) {
+                        closeAddModal();
+                        refreshCurrentView();
+                    } else {
+                        throw new Error(res.error || 'Failed to create machine.');
+                    }
+                } catch (err) {
+                    if (errorEl) {
+                        errorEl.textContent = err.message || 'Error creating machine.';
+                        errorEl.style.display = 'block';
+                    }
+                } finally {
+                    if (spinner) spinner.style.display = 'none';
+                    if (btnText) btnText.textContent = 'Register Machine';
+                }
+            });
+        }
+    }
+
+    async function showAddMachineModal() {
+        if (!currentUser || (currentUser.role !== 'CEO' && currentUser.role !== 'CUSTOMER')) {
+            return;
+        }
+
+        const modal = document.getElementById('add-machine-modal');
+        const form = document.getElementById('add-machine-form');
+        const idInput = document.getElementById('new-machine-id');
+        const orgSelect = document.getElementById('new-machine-org');
+        const errorEl = document.getElementById('add-machine-error');
+        const locInput = document.getElementById('new-machine-location');
+
+        if (form) form.reset();
+        if (errorEl) {
+            errorEl.textContent = '';
+            errorEl.style.display = 'none';
+        }
+
+        // Auto-generate next ID proposal
+        try {
+            const listRes = await ApiClient.getMachines();
+            const machines = listRes.machines || [];
+            let maxNum = 0;
+            for (const m of machines) {
+                const match = (m.id || '').match(/^CS-FS-(\d+)$/);
+                if (match) {
+                    const num = parseInt(match[1], 10);
+                    if (num > maxNum) maxNum = num;
+                }
+            }
+            if (idInput) {
+                idInput.value = `CS-FS-${String(maxNum + 1).padStart(4, '0')}`;
             }
         } catch (e) {
-            console.error("Error parsing WebSocket message:", e);
+            if (idInput) idInput.value = 'CS-FS-0007';
         }
-    };
-    
-    socket.onclose = () => {
-        console.log('WebSocket Disconnected. Reconnecting...');
-        updateConnectionStatus('DISCONNECTED');
-        setTimeout(connectRealtime, 5000);
-    };
-    
-    socket.onerror = (error) => {
-        console.error('WebSocket Error:', error);
-    };
-}
 
-// Initialization
-document.addEventListener('DOMContentLoaded', () => {
-    // Initial paint
-    updateMachineData(currentMockData);
-    
-    if (REALTIME_MODE) {
-        connectRealtime();
-    } else if (USE_MOCK_DATA) {
-        startMockData();
+        // Populate Organization options
+        if (orgSelect) {
+            try {
+                const orgRes = await ApiClient.getOrganizations();
+                const orgs = orgRes.organizations || [];
+
+                if (currentUser.role === 'CEO') {
+                    orgSelect.disabled = false;
+                    orgSelect.innerHTML = orgs.map(o => `
+                        <option value="${o.id}">${o.name} (${o.code || o.id})</option>
+                    `).join('');
+                } else {
+                    // Customer: preselect their own org and lock
+                    const userOrg = orgs.find(o => o.id === currentUser.organizationId) || {
+                        id: currentUser.organizationId,
+                        name: currentUser.organizationName || 'My Organization'
+                    };
+                    orgSelect.innerHTML = `<option value="${userOrg.id}" selected>${userOrg.name}</option>`;
+                    orgSelect.disabled = true;
+                }
+            } catch (e) {
+                console.error('Failed to load organizations:', e);
+            }
+        }
+
+        if (locInput) {
+            locInput.value = currentUser.role === 'CUSTOMER' ? 'Facility Processing Bay - Primary Shredder' : 'Processing Floor - Unit 5 Bay A';
+        }
+
+        if (modal) modal.style.display = 'flex';
     }
+
+    function confirmDeleteMachine(machineId, machineModel, isFromDetail = false) {
+        if (!currentUser || (currentUser.role !== 'CEO' && currentUser.role !== 'CUSTOMER')) {
+            return;
+        }
+
+        const modelLabel = machineModel ? ` (${machineModel})` : '';
+        showConfirmModal(
+            `Remove Machine ${machineId}`,
+            `Are you sure you want to permanently remove ${machineId}${modelLabel}? This will unregister the unit, delete its recorded historical sensor telemetry, and disconnect real-time streams.`,
+            async () => {
+                try {
+                    const res = await ApiClient.deleteMachine(machineId);
+                    if (res.success) {
+                        if (isFromDetail) {
+                            navigateBack();
+                        } else {
+                            refreshCurrentView();
+                        }
+                    } else {
+                        alert(res.error || 'Failed to remove machine.');
+                    }
+                } catch (err) {
+                    alert(err.message || 'Error occurred while removing machine.');
+                }
+            }
+        );
+    }
+
+    return {
+        init,
+        navigateTo,
+        navigateToMachine,
+        navigateBack,
+        refreshCurrentView,
+        autofillCredentials,
+        showConfirmModal,
+        showAddMachineModal,
+        confirmDeleteMachine,
+        getCurrentUser: () => currentUser,
+        get wsClient() { return wsClient; },
+        getWsClient: () => wsClient
+    };
+})();
+
+document.addEventListener('DOMContentLoaded', () => {
+    App.init();
 });
