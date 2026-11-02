@@ -29,10 +29,11 @@ h1, h2, h3, h4, h5, h6,
     inset: 0;
     z-index: 9999;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
+    padding: 30px 16px;
     background: linear-gradient(135deg, #002B37 0%, #004D63 45%, #006786 100%);
-    overflow: hidden;
+    overflow-y: auto;
     transition: opacity 0.5s ease, transform 0.5s ease;
 }
 
@@ -79,6 +80,7 @@ h1, h2, h3, h4, h5, h6,
     z-index: 10;
     width: 100%;
     max-width: 440px;
+    margin: auto 0;
     background: rgba(255, 255, 255, 0.08);
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
@@ -289,16 +291,11 @@ h1, h2, h3, h4, h5, h6,
 .hint-chevron { margin-left: auto; transition: transform 0.3s ease; }
 
 .login-hint-panel {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.4s ease;
-    margin-top: 0;
+    display: none;
+    margin-top: 14px;
 }
 .login-hint-panel.open {
-    max-height: 600px;
-    overflow-y: auto;
-    margin-top: 12px;
-    padding-right: 4px;
+    display: block !important;
 }
 .login-hint-toggle.open .hint-chevron {
     transform: rotate(180deg);

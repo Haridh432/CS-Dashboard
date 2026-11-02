@@ -46,21 +46,9 @@ const App = (() => {
     async function checkSession() {
         const token = ApiClient.getToken();
         if (!token) {
-            try {
-                // Seamlessly provide the dashboard directly without login barrier
-                const autoRes = await ApiClient.login('ceo@circularseed.com', 'CircularCEO#2025');
-                if (autoRes.success && autoRes.user) {
-                    currentUser = autoRes.user;
-                    hideLoginOverlay();
-                    updateHeaderUserProfile();
-                    wsClient.connect();
-                    routeInitialView();
-                    return;
-                }
-            } catch (err) {
-                showLoginOverlay();
-                return;
-            }
+            // Keep login screen open for user authentication
+            showLoginOverlay();
+            return;
         }
 
         try {
@@ -72,33 +60,12 @@ const App = (() => {
                 wsClient.connect();
                 routeInitialView();
             } else {
-                // Try seamless auto-login before falling back to login screen
-                const autoRes = await ApiClient.login('ceo@circularseed.com', 'admin123');
-                if (autoRes.success && autoRes.user) {
-                    currentUser = autoRes.user;
-                    hideLoginOverlay();
-                    updateHeaderUserProfile();
-                    wsClient.connect();
-                    routeInitialView();
-                } else {
-                    showLoginOverlay();
-                }
+                ApiClient.clearToken();
+                showLoginOverlay();
             }
         } catch (err) {
             ApiClient.clearToken();
-            try {
-                const autoRes = await ApiClient.login('ceo@circularseed.com', 'admin123');
-                if (autoRes.success && autoRes.user) {
-                    currentUser = autoRes.user;
-                    hideLoginOverlay();
-                    updateHeaderUserProfile();
-                    wsClient.connect();
-                    routeInitialView();
-                    return;
-                }
-            } catch (e) {
-                showLoginOverlay();
-            }
+            showLoginOverlay();
         }
     }
 
@@ -329,10 +296,9 @@ const App = (() => {
             });
         }
 
-        if (hintToggle && hintPanel) {
-            hintToggle.addEventListener('click', () => {
-                hintPanel.classList.toggle('open');
-                hintToggle.classList.toggle('open');
+        if (hintToggle) {
+            hintToggle.addEventListener('click', (e) => {
+                toggleDemoAccounts(e);
             });
         }
 
@@ -344,6 +310,8 @@ const App = (() => {
             form.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 errorEl.textContent = '';
+                errorEl.style.display = 'none';
+                errorEl.classList.remove('visible');
                 btnText.textContent = 'Signing In...';
                 spinner.style.display = 'block';
 
@@ -360,9 +328,13 @@ const App = (() => {
                         routeInitialView();
                     } else {
                         errorEl.textContent = res.error || 'Invalid credentials.';
+                        errorEl.style.display = 'block';
+                        errorEl.classList.add('visible');
                     }
                 } catch (err) {
                     errorEl.textContent = err.message || 'Login failed. Please verify credentials.';
+                    errorEl.style.display = 'block';
+                    errorEl.classList.add('visible');
                 } finally {
                     btnText.textContent = 'Sign In';
                     spinner.style.display = 'none';
@@ -371,9 +343,38 @@ const App = (() => {
         }
     }
 
+    function toggleDemoAccounts(e) {
+        if (e) {
+            if (e.preventDefault) e.preventDefault();
+            if (e.stopPropagation) e.stopPropagation();
+        }
+        const panel = document.getElementById('login-hint-panel');
+        const toggle = document.getElementById('login-hint-toggle');
+        if (!panel) return;
+        
+        const isCurrentlyOpen = panel.classList.contains('open') || panel.style.display === 'block';
+        if (isCurrentlyOpen) {
+            panel.classList.remove('open');
+            panel.style.display = 'none';
+            if (toggle) toggle.classList.remove('open');
+        } else {
+            panel.classList.add('open');
+            panel.style.display = 'block';
+            if (toggle) toggle.classList.add('open');
+            setTimeout(() => {
+                panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 50);
+        }
+    }
+
     async function populateDemoCredentials() {
         const grid = document.getElementById('hint-grid');
         if (!grid) return;
+
+        // If pre-rendered HTML cards exist in index.html, preserve them
+        if (grid.children && grid.children.length >= 3) {
+            return;
+        }
 
         try {
             const res = await ApiClient.getDemoCredentials();
@@ -387,22 +388,21 @@ const App = (() => {
 
             grid.innerHTML = creds.map(c => `
                 <div class="hint-card">
-                    <div class="hint-card-header" style="background: ${roleColors[c.role] || '#374151'}">
+                    <div class="hint-card-header" style="background: ${roleColors[c.role] || '#374151'}; display: flex; justify-content: space-between; align-items: center; padding: 8px 12px;">
                         <span>${c.role}</span>
                         <span style="font-size: 10px; font-weight: normal; opacity: 0.85;">${c.title}</span>
                     </div>
-                    <div class="hint-card-body">
+                    <div class="hint-card-body" style="padding: 10px 12px; display: flex; flex-direction: column; gap: 6px;">
                         <div class="hint-field">
-                            <span class="hint-label">Email</span>
-                            <span class="hint-value">${c.email}</span>
+                            <span class="hint-label" style="font-size: 9px; opacity: 0.6;">Email</span>
+                            <span class="hint-value" style="font-size: 12px; font-weight: 600;">${c.email}</span>
                         </div>
                         <div class="hint-field">
-                            <span class="hint-label">Password</span>
-                            <span class="hint-value">${c.password}</span>
+                            <span class="hint-label" style="font-size: 9px; opacity: 0.6;">Password</span>
+                            <span class="hint-value" style="font-size: 12px; font-weight: 600;">${c.password}</span>
                         </div>
-                        <p style="font-size: 10px; color: rgba(255,255,255,0.5); margin: 6px 0;">${c.desc}</p>
-                        <button class="hint-autofill" onclick="App.autofillCredentials('${c.email}', '${c.password}')">
-                            Use these credentials
+                        <button type="button" class="hint-autofill" onclick="App.autofillCredentials('${c.email}', '${c.password}')" style="margin-top: 4px; padding: 7px; font-size: 11px; font-weight: 700; background: ${roleColors[c.role] || '#4F46E5'}; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                            Autofill ${c.role} Credentials
                         </button>
                     </div>
                 </div>
@@ -419,7 +419,10 @@ const App = (() => {
         const toggle = document.getElementById('login-hint-toggle');
         if (uInput) uInput.value = email;
         if (pInput) pInput.value = password;
-        if (panel) panel.classList.remove('open');
+        if (panel) {
+            panel.classList.remove('open');
+            panel.style.display = 'none';
+        }
         if (toggle) toggle.classList.remove('open');
     }
 
@@ -663,6 +666,7 @@ const App = (() => {
         navigateToMachine,
         navigateBack,
         refreshCurrentView,
+        toggleDemoAccounts,
         autofillCredentials,
         showConfirmModal,
         showAddMachineModal,
