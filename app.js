@@ -2,12 +2,6 @@
  * CircularSeed Multi-Machine Monitoring Platform
  * Master Application Controller & Client-Side Router
  */
-import { subscribeToMachine } from "./firebase.js";
-
-subscribeToMachine((data) => {
-    console.log("REALTIME DATA");
-    console.log(data);
-});
 const App = (() => {
     let currentUser = null;
     let wsClient = null;
@@ -18,6 +12,26 @@ const App = (() => {
     // View Mount container in DOM
     let mainMount = null;
 
+    function initFirebaseSubscription() {
+        const handleData = (data) => {
+            console.log("Firebase Realtime machine data:", data);
+            if (typeof MachineDetail !== 'undefined' && MachineDetail && typeof MachineDetail.updateLiveTelemetry === 'function') {
+                MachineDetail.updateLiveTelemetry(data);
+            }
+        };
+
+        if (typeof window !== 'undefined' && window.FirebaseService && typeof window.FirebaseService.subscribeToMachine === 'function') {
+            window.FirebaseService.subscribeToMachine(handleData);
+        } else if (typeof window !== 'undefined') {
+            window.addEventListener('firebase:ready', (e) => {
+                const svc = (e && e.detail) || window.FirebaseService;
+                if (svc && typeof svc.subscribeToMachine === 'function') {
+                    svc.subscribeToMachine(handleData);
+                }
+            }, { once: true });
+        }
+    }
+
     function init() {
         mainMount = document.getElementById('main-content-mount');
         wsClient = new GatewayWebSocketClient();
@@ -26,6 +40,7 @@ const App = (() => {
         setupAuthEvents();
         setupAddMachineModal();
         setupGlobalRouting();
+        initFirebaseSubscription();
 
         // WebSocket Status Handlers
         wsClient.onStatusChange = (status, detail) => {
@@ -587,6 +602,10 @@ const App = (() => {
         getWsClient: () => wsClient
     };
 })();
+
+if (typeof window !== 'undefined') {
+    window.App = App;
+}
 
 document.addEventListener('DOMContentLoaded', () => {
     App.init();
