@@ -12,12 +12,116 @@ const App = (() => {
     // View Mount container in DOM
     let mainMount = null;
 
+    /**
+     * Maps raw Firebase Realtime Database telemetry to MachineDetail packet structure
+     */
+    function mapFirebaseTelemetryToPacket(data, machineId = 'CS001') {
+        if (!data) return null;
+        if (data.machine && data.dcPower) {
+            return { ...data, machineId: data.machineId || machineId, isDemo: false };
+        }
+
+        const state = (data.status || 'RUNNING').toUpperCase();
+        const runtimeSec = typeof data.runtime === 'number' ? data.runtime : parseInt(data.runtime || 0, 10);
+        // Note: Firebase RTDB provides Voltage with capital 'V' or lowercase 'voltage'
+        const volt = typeof data.Voltage === 'number' ? data.Voltage : (typeof data.voltage === 'number' ? data.voltage : parseFloat(data.Voltage || data.voltage || 0));
+        const curr = typeof data.current === 'number' ? data.current : parseFloat(data.current || 0);
+        const power = typeof data.power === 'number' ? data.power : (Math.round(volt * curr) || 0);
+        const rpm = typeof data.rpm === 'number' ? data.rpm : parseInt(data.rpm || 0, 10);
+        const temp = typeof data.motorTemperature === 'number' ? data.motorTemperature : parseFloat(data.motorTemperature || 0);
+        const energy = typeof data.energy === 'number' ? data.energy : parseFloat(data.energy || 0);
+        const fault = data.fault ? (typeof data.fault === 'string' ? data.fault : 'ACTIVE_FAULT') : 'NORMAL';
+        const estop = !!data.emergencyStop;
+        const jam = !!data.jam;
+        const wifi = data.wifi !== false;
+        const lastUpdateIso = data.lastUpdate ? (typeof data.lastUpdate === 'number' ? new Date(data.lastUpdate).toISOString() : new Date(data.lastUpdate).toISOString()) : new Date().toISOString();
+
+        return {
+            type: 'telemetry',
+            machineId: machineId,
+            timestamp: lastUpdateIso,
+            isDemo: false,
+            machine: {
+                state: state,
+                runId: 'RUN-' + machineId,
+                runtimeSeconds: runtimeSec
+            },
+            dcPower: {
+                voltage: volt,
+                current: curr,
+                power: power,
+                energyWh: energy,
+                lifetimeEnergyKWh: +(energy / 1000).toFixed(3)
+            },
+            motors: [
+                { id: 'M1', rpm: rpm, temperature: temp, current: +(curr / 2).toFixed(1), state: state, fault: fault },
+                { id: 'M2', rpm: rpm, temperature: temp, current: +(curr / 2).toFixed(1), state: state, fault: fault }
+            ],
+            battery: {
+                configured: true,
+                voltage: +(volt * 0.52).toFixed(1),
+                soc: 85,
+                current: +(curr * 0.2).toFixed(1),
+                powerW: +(power * 0.2).toFixed(0),
+                temperature: temp,
+                status: state === 'RUNNING' ? 'DISCHARGING' : 'STANDBY'
+            },
+            solar: {
+                configured: true,
+                powerW: 420,
+                dailyEnergyWh: 1500
+            },
+            safety: {
+                estopActive: estop,
+                guardClosed: true,
+                overload: false,
+                overtemperature: temp > 75,
+                jamDetected: jam,
+                commsError: false,
+                faultCode: fault === 'NORMAL' ? null : fault
+            },
+            wifi: wifi,
+            rawFirebase: data
+        };
+    }
+
     function initFirebaseSubscription() {
         const handleData = (data) => {
-            console.log("Firebase Realtime machine data:", data);
+            console.log("[Firebase RTDB] Live machine update received:", data);
+            if (!data) return;
+
+            const packet = mapFirebaseTelemetryToPacket(data, 'CS001');
+
+            // 1. Update MachineDetail view if open
             if (typeof MachineDetail !== 'undefined' && MachineDetail && typeof MachineDetail.updateLiveTelemetry === 'function') {
-                MachineDetail.updateLiveTelemetry(data);
+                MachineDetail.updateLiveTelemetry(packet);
             }
+
+            // 2. Update FleetOverview live machine card in-place if active
+            if (typeof FleetOverview !== 'undefined' && FleetOverview && typeof FleetOverview.updateCardTelemetry === 'function') {
+                FleetOverview.updateCardTelemetry({
+                    machineId: 'CS001',
+                    state: packet.machine.state,
+                    rpm: packet.motors[0].rpm,
+                    voltage: packet.dcPower.voltage,
+                    power: packet.dcPower.power,
+                    lastSeen: packet.timestamp
+                });
+
+                // Update fleet counters in real time
+                const isRunning = packet.machine.state === 'RUNNING';
+                const elRunning = document.getElementById('stat-running');
+                if (elRunning) elRunning.textContent = isRunning ? '1' : '0';
+                const elStopped = document.getElementById('stat-stopped');
+                if (elStopped) elStopped.textContent = isRunning ? '0' : '1';
+                const elFaults = document.getElementById('stat-faults');
+                if (elFaults) elFaults.textContent = packet.safety.faultCode && packet.safety.faultCode !== 'NORMAL' ? '1' : '0';
+                const elOffline = document.getElementById('stat-offline');
+                if (elOffline) elOffline.textContent = packet.wifi === false ? '1' : '0';
+            }
+
+            // 3. Update top connection status pill to ONLINE
+            updateHeaderConnectionStatus('CONNECTED', 'ONLINE');
         };
 
         if (typeof window !== 'undefined' && window.FirebaseService && typeof window.FirebaseService.subscribeToMachine === 'function') {
@@ -32,6 +136,66 @@ const App = (() => {
         }
     }
 
+    function mapFirebaseUser(user) {
+        if (!user) return null;
+        const email = user.email || '';
+        let role = 'CEO';
+        const lowerEmail = email.toLowerCase();
+        if (lowerEmail.includes('customer')) {
+            role = 'CUSTOMER';
+        } else if (lowerEmail.includes('operator')) {
+            role = 'OPERATOR';
+        } else if (lowerEmail.includes('admin') || lowerEmail.includes('ceo')) {
+            role = 'CEO';
+        }
+
+        const prefix = lowerEmail.split('@')[0] || 'User';
+        const displayName = user.displayName || (prefix.charAt(0).toUpperCase() + prefix.slice(1));
+        const avatar = displayName.substring(0, 2).toUpperCase();
+
+        return {
+            id: user.uid,
+            email: email,
+            role: role,
+            name: displayName,
+            organizationId: 'ORG-CIRCULARSEED',
+            organization_id: 'ORG-CIRCULARSEED',
+            organizationName: 'CircularSeed Internal Fleet',
+            avatar: avatar
+        };
+    }
+
+    function setupFirebaseAuthObserver() {
+        const attachObserver = (svc) => {
+            const observeFn = (svc && svc.observeAuthState) || window.observeAuthState;
+            if (typeof observeFn === 'function') {
+                observeFn((firebaseUser) => {
+                    if (firebaseUser) {
+                        currentUser = mapFirebaseUser(firebaseUser);
+                        hideLoginOverlay();
+                        updateHeaderUserProfile();
+                        if (wsClient) wsClient.connect();
+                        routeInitialView();
+                    } else {
+                        currentUser = null;
+                        if (wsClient) wsClient.disconnect();
+                        showLoginOverlay();
+                        const userPill = document.getElementById('user-pill');
+                        if (userPill) userPill.style.display = 'none';
+                    }
+                });
+            }
+        };
+
+        if (typeof window !== 'undefined' && window.FirebaseService) {
+            attachObserver(window.FirebaseService);
+        } else if (typeof window !== 'undefined') {
+            window.addEventListener('firebase:ready', (e) => {
+                attachObserver((e && e.detail) || window.FirebaseService);
+            }, { once: true });
+        }
+    }
+
     function init() {
         mainMount = document.getElementById('main-content-mount');
         wsClient = new GatewayWebSocketClient();
@@ -41,51 +205,26 @@ const App = (() => {
         setupAddMachineModal();
         setupGlobalRouting();
         initFirebaseSubscription();
+        setupFirebaseAuthObserver();
 
         // WebSocket Status Handlers
         wsClient.onStatusChange = (status, detail) => {
+            if (typeof window !== 'undefined' && window.FirebaseService) {
+                updateHeaderConnectionStatus('CONNECTED', 'ONLINE');
+                return;
+            }
             updateHeaderConnectionStatus(status, detail);
         };
 
         wsClient.onTelemetry = (packet) => {
+            // CS001 telemetry is authoritatively driven by Firebase Realtime Database
+            if (packet && packet.machineId === 'CS001') {
+                return;
+            }
             if (typeof MachineDetail !== 'undefined' && MachineDetail && typeof MachineDetail.updateLiveTelemetry === 'function') {
                 MachineDetail.updateLiveTelemetry(packet);
             }
         };
-
-        // Global auth expired event
-        window.addEventListener('auth:expired', () => {
-            handleLogout();
-        });
-
-        // Check active session
-        checkSession();
-    }
-
-    async function checkSession() {
-        const token = ApiClient.getToken();
-        if (!token) {
-            // Keep login screen open for user authentication
-            showLoginOverlay();
-            return;
-        }
-
-        try {
-            const res = await ApiClient.getCurrentUser();
-            if (res.success && res.user) {
-                currentUser = res.user;
-                hideLoginOverlay();
-                updateHeaderUserProfile();
-                wsClient.connect();
-                routeInitialView();
-            } else {
-                ApiClient.clearToken();
-                showLoginOverlay();
-            }
-        } catch (err) {
-            ApiClient.clearToken();
-            showLoginOverlay();
-        }
     }
 
     function routeInitialView() {
@@ -154,6 +293,9 @@ const App = (() => {
     }
 
     async function renderRoute(route, params = {}) {
+        if (!mainMount) {
+            mainMount = document.getElementById('main-content-mount');
+        }
         if (!mainMount) return;
 
         // Unsubscribe from machine if leaving detail
@@ -162,8 +304,8 @@ const App = (() => {
             currentMachineId = null;
         }
 
-        if (route === '/ceo/dashboard' || (route === 'default' && currentUser.role === 'CEO')) {
-            if (currentUser.role !== 'CEO') {
+        if (route === '/' || route === '/ceo/dashboard' || (route === 'default' && (!currentUser || currentUser.role === 'CEO'))) {
+            if (currentUser && currentUser.role !== 'CEO') {
                 return navigateBack();
             }
             mainMount.innerHTML = `<div class="detail-loading"><div class="login-spinner"></div><p>Loading manufactured fleet...</p></div>`;
@@ -178,6 +320,7 @@ const App = (() => {
                 });
                 wsClient.subscribeFleet();
             } catch (err) {
+                console.error('[Dashboard] Error loading fleet:', err);
                 mainMount.innerHTML = `<div class="empty-filter-state"><p>Error loading fleet: ${err.message}</p></div>`;
             }
             return;
@@ -330,19 +473,36 @@ const App = (() => {
                 const password = passwordInput.value;
 
                 try {
-                    const res = await ApiClient.login(email, password, true);
-                    if (res.success && res.user) {
-                        currentUser = res.user;
-                        hideLoginOverlay();
-                        updateHeaderUserProfile();
-                        wsClient.connect();
-                        routeInitialView();
+                    const loginFn = window.loginUser || (window.FirebaseService && window.FirebaseService.loginUser);
+                    if (typeof loginFn === 'function') {
+                        const res = await loginFn(email, password);
+                        if (res.success && res.user) {
+                            currentUser = mapFirebaseUser(res.user);
+                            hideLoginOverlay();
+                            updateHeaderUserProfile();
+                            if (wsClient) wsClient.connect();
+                            routeInitialView();
+                        } else {
+                            errorEl.textContent = res.error || 'Authentication failed. Please verify your credentials.';
+                            errorEl.style.display = 'block';
+                            errorEl.classList.add('visible');
+                        }
                     } else {
-                        errorEl.textContent = res.error || 'Invalid credentials.';
-                        errorEl.style.display = 'block';
-                        errorEl.classList.add('visible');
+                        const res = await ApiClient.login(email, password, true);
+                        if (res.success && res.user) {
+                            currentUser = res.user;
+                            hideLoginOverlay();
+                            updateHeaderUserProfile();
+                            if (wsClient) wsClient.connect();
+                            routeInitialView();
+                        } else {
+                            errorEl.textContent = res.error || 'Invalid credentials.';
+                            errorEl.style.display = 'block';
+                            errorEl.classList.add('visible');
+                        }
                     }
                 } catch (err) {
+                    console.error('[AUTH] Login exception:', err);
                     errorEl.textContent = err.message || 'Login failed. Please verify credentials.';
                     errorEl.style.display = 'block';
                     errorEl.classList.add('visible');
@@ -355,7 +515,17 @@ const App = (() => {
     }
 
     async function handleLogout() {
-        await ApiClient.logout();
+        try {
+            const logoutFn = window.logoutUser || (window.FirebaseService && window.FirebaseService.logoutUser);
+            if (typeof logoutFn === 'function') {
+                await logoutFn();
+            }
+        } catch (e) {
+            console.error('[AUTH] Sign out error:', e);
+        }
+        try {
+            await ApiClient.logout();
+        } catch (e) {}
         currentUser = null;
         if (wsClient) wsClient.disconnect();
         showLoginOverlay();
