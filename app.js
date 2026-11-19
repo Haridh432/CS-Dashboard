@@ -2,7 +2,12 @@
  * CircularSeed Multi-Machine Monitoring Platform
  * Master Application Controller & Client-Side Router
  */
+import { subscribeToMachine } from "./firebase.js";
 
+subscribeToMachine((data) => {
+    console.log("REALTIME DATA");
+    console.log(data);
+});
 const App = (() => {
     let currentUser = null;
     let wsClient = null;
