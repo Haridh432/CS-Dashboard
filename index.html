@@ -7,7 +7,7 @@
     <title>CircularSeed FLEXISHRED-DC &bull; Machine Monitoring Platform</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=6">
+    <link rel="stylesheet" href="style.css?v=7">
 </head>
 
 <body>
@@ -26,7 +26,13 @@
                 </div>
             </div>
 
-            <!-- Login Form -->
+            <!-- Auth Mode Switcher Tabs -->
+            <div class="auth-tabs" id="auth-tabs">
+                <button type="button" class="auth-tab active" id="tab-signin">Sign In</button>
+                <button type="button" class="auth-tab" id="tab-signup">Create Account</button>
+            </div>
+
+            <!-- Login Form (Sign In) -->
             <form class="login-form" id="login-form" autocomplete="off">
                 <div class="login-field">
                     <label for="login-username">Email Address</label>
@@ -53,6 +59,66 @@
                     <span id="login-btn-text">Sign In</span>
                     <div class="login-spinner" id="login-spinner" style="display: none;"></div>
                 </button>
+
+                <div class="auth-switch-link">
+                    <span>Don't have an account?</span>
+                    <a href="#" id="link-goto-signup">Create Account</a>
+                </div>
+            </form>
+
+            <!-- Create Account (Sign Up) Form -->
+            <form class="login-form" id="signup-form" autocomplete="off" style="display: none;">
+                <div class="login-field">
+                    <label for="signup-name">Full Name</label>
+                    <div class="login-input-wrap">
+                        <svg class="login-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        <input type="text" id="signup-name" class="login-input" placeholder="e.g. Harish S" autocomplete="name" required>
+                    </div>
+                </div>
+
+                <div class="login-field">
+                    <label for="signup-email">Email Address</label>
+                    <div class="login-input-wrap">
+                        <svg class="login-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,12 2,6"/></svg>
+                        <input type="email" id="signup-email" class="login-input" placeholder="name@circularseed.com" autocomplete="username" required>
+                    </div>
+                </div>
+
+                <div class="login-field">
+                    <label for="signup-role">Role</label>
+                    <div class="login-input-wrap">
+                        <svg class="login-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        <select id="signup-role" class="login-input login-select" required>
+                            <option value="OPERATOR">Operator (Machine Telemetry & Controls)</option>
+                            <option value="CUSTOMER">Customer (Organization Machine Status)</option>
+                            <option value="CEO">CEO (Executive Fleet Overview & Analytics)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="login-field">
+                    <label for="signup-password">Password</label>
+                    <div class="login-input-wrap">
+                        <svg class="login-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        <input type="password" id="signup-password" class="login-input" placeholder="Create a password (min 6 chars)" autocomplete="new-password" required minlength="6">
+                        <button type="button" class="login-eye" id="signup-toggle-pw" title="Toggle password visibility">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Error Message -->
+                <div class="login-error" id="signup-error"></div>
+
+                <button type="submit" class="login-btn" id="signup-submit-btn">
+                    <span id="signup-btn-text">Create Account</span>
+                    <div class="login-spinner" id="signup-spinner" style="display: none;"></div>
+                </button>
+
+                <div class="auth-switch-link">
+                    <span>Already have an account?</span>
+                    <a href="#" id="link-goto-signin">Sign In</a>
+                </div>
             </form>
         </div>
 
@@ -81,12 +147,28 @@
                 <span id="conn-status">ONLINE</span>
             </div>
 
-            <!-- User Info Pill -->
-            <div class="user-pill" id="user-pill">
+            <!-- User Info Pill with Role Switch Dropdown -->
+            <div class="user-pill" id="user-pill" style="position: relative; cursor: pointer;" title="Click to view or switch active role">
                 <div class="user-avatar" id="user-avatar">--</div>
                 <div class="user-info">
                     <span class="user-name" id="user-name">Not Logged In</span>
-                    <span class="user-role-badge" id="user-role-badge">--</span>
+                    <span class="user-role-badge" id="user-role-badge" title="Role (Click to change)">--</span>
+                </div>
+                <!-- Role Switcher Dropdown Menu -->
+                <div class="role-dropdown" id="role-dropdown" style="display: none;">
+                    <div class="role-dropdown-title">Switch Account Role</div>
+                    <button type="button" class="role-dropdown-item" data-role="CEO">
+                        <span>CEO Fleet View</span>
+                        <span class="user-role-badge role-badge-ceo">CEO</span>
+                    </button>
+                    <button type="button" class="role-dropdown-item" data-role="OPERATOR">
+                        <span>Operator Console</span>
+                        <span class="user-role-badge role-badge-operator">OPERATOR</span>
+                    </button>
+                    <button type="button" class="role-dropdown-item" data-role="CUSTOMER">
+                        <span>Customer Fleet</span>
+                        <span class="user-role-badge role-badge-customer">CUSTOMER</span>
+                    </button>
                 </div>
             </div>
 
@@ -224,19 +306,19 @@
     </div>
 
     <!-- Firebase Architecture -->
-    <script type="module" src="firebase.js?v=10"></script>
+    <script type="module" src="firebase.js?v=11"></script>
 
     <!-- Application Script Architecture -->
-    <script src="api.js?v=10"></script>
-    <script src="components/StatusBadge.js?v=10"></script>
-    <script src="components/MachineCard.js?v=10"></script>
-    <script src="components/TelemetryChart.js?v=10"></script>
-    <script src="components/FleetOverview.js?v=10"></script>
-    <script src="components/CustomerView.js?v=10"></script>
-    <script src="components/OperatorView.js?v=10"></script>
-    <script src="components/MachineDetail.js?v=10"></script>
-    <script src="websocket.js?v=10"></script>
-    <script src="app.js?v=10"></script>
+    <script src="api.js?v=11"></script>
+    <script src="components/StatusBadge.js?v=11"></script>
+    <script src="components/MachineCard.js?v=11"></script>
+    <script src="components/TelemetryChart.js?v=11"></script>
+    <script src="components/FleetOverview.js?v=11"></script>
+    <script src="components/CustomerView.js?v=11"></script>
+    <script src="components/OperatorView.js?v=11"></script>
+    <script src="components/MachineDetail.js?v=11"></script>
+    <script src="websocket.js?v=11"></script>
+    <script src="app.js?v=11"></script>
 </body>
 
 </html>

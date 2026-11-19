@@ -66,15 +66,31 @@ const ApiClient = (() => {
         } catch (e) {}
     }
 
-    function buildUserFromEmail(email, uid = null, displayName = null) {
+    function buildUserFromEmail(email, uid = null, displayName = null, explicitRole = null) {
         const lowerEmail = (email || '').toLowerCase().trim();
-        let role = 'CEO';
-        if (lowerEmail.includes('customer')) {
-            role = 'CUSTOMER';
-        } else if (lowerEmail.includes('operator')) {
-            role = 'OPERATOR';
-        } else if (lowerEmail.includes('admin') || lowerEmail.includes('ceo')) {
-            role = 'CEO';
+        let role = explicitRole;
+        if (!role && uid && typeof localStorage !== 'undefined') {
+            role = localStorage.getItem(`cs_user_role_${uid}`);
+            if (!role) {
+                try {
+                    const prof = JSON.parse(localStorage.getItem(`cs_user_profile_${uid}`) || '{}');
+                    if (prof && prof.role) role = prof.role;
+                } catch (e) {}
+            }
+        }
+        if (!role && typeof localStorage !== 'undefined') {
+            role = localStorage.getItem(`cs_user_role_${lowerEmail}`);
+        }
+        if (!role) {
+            if (lowerEmail.includes('customer')) {
+                role = 'CUSTOMER';
+            } else if (lowerEmail.includes('operator')) {
+                role = 'OPERATOR';
+            } else if (lowerEmail.includes('admin') || lowerEmail.includes('ceo')) {
+                role = 'CEO';
+            } else {
+                role = 'OPERATOR';
+            }
         }
 
         const prefix = lowerEmail.split('@')[0] || 'User';

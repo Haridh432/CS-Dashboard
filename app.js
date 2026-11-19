@@ -136,31 +136,57 @@ const App = (() => {
         }
     }
 
-    function mapFirebaseUser(user) {
+    function mapFirebaseUser(user, profile = null) {
         if (!user) return null;
         const email = user.email || '';
-        let role = 'CEO';
         const lowerEmail = email.toLowerCase();
-        if (lowerEmail.includes('customer')) {
-            role = 'CUSTOMER';
-        } else if (lowerEmail.includes('operator')) {
-            role = 'OPERATOR';
-        } else if (lowerEmail.includes('admin') || lowerEmail.includes('ceo')) {
-            role = 'CEO';
+        const uid = user.uid;
+
+        // 1. Resolve role from profile or cache
+        let role = null;
+        if (profile && profile.role) {
+            role = profile.role.toUpperCase();
+        }
+        if (!role && user.userProfile && user.userProfile.role) {
+            role = user.userProfile.role.toUpperCase();
+        }
+        if (!role && typeof localStorage !== 'undefined') {
+            role = localStorage.getItem(`cs_user_role_${uid}`);
+            if (!role && lowerEmail) {
+                role = localStorage.getItem(`cs_user_role_${lowerEmail}`);
+            }
+        }
+        if (!role) {
+            if (lowerEmail.includes('customer')) {
+                role = 'CUSTOMER';
+            } else if (lowerEmail.includes('operator')) {
+                role = 'OPERATOR';
+            } else if (lowerEmail.includes('admin') || lowerEmail.includes('ceo')) {
+                role = 'CEO';
+            } else {
+                role = 'OPERATOR';
+            }
         }
 
+        // 2. Resolve display name
         const prefix = lowerEmail.split('@')[0] || 'User';
-        const displayName = user.displayName || (prefix.charAt(0).toUpperCase() + prefix.slice(1));
+        const defaultName = prefix.charAt(0).toUpperCase() + prefix.slice(1);
+        let displayName = (profile && profile.name) || user.displayName || defaultName;
+        if ((!displayName || displayName === 'User') && typeof localStorage !== 'undefined') {
+            const cachedName = localStorage.getItem(`cs_user_name_${uid}`);
+            if (cachedName) displayName = cachedName;
+        }
+
         const avatar = displayName.substring(0, 2).toUpperCase();
 
         return {
-            id: user.uid,
+            id: uid,
             email: email,
             role: role,
             name: displayName,
-            organizationId: 'ORG-CIRCULARSEED',
-            organization_id: 'ORG-CIRCULARSEED',
-            organizationName: 'CircularSeed Internal Fleet',
+            organizationId: (profile && profile.organizationId) || 'ORG-CIRCULARSEED',
+            organization_id: (profile && profile.organizationId) || 'ORG-CIRCULARSEED',
+            organizationName: (profile && profile.organizationName) || 'CircularSeed Internal Fleet',
             avatar: avatar
         };
     }
@@ -169,9 +195,15 @@ const App = (() => {
         const attachObserver = (svc) => {
             const observeFn = (svc && svc.observeAuthState) || window.observeAuthState;
             if (typeof observeFn === 'function') {
-                observeFn((firebaseUser) => {
+                observeFn(async (firebaseUser) => {
                     if (firebaseUser) {
-                        currentUser = mapFirebaseUser(firebaseUser);
+                        let profile = firebaseUser.userProfile || null;
+                        if (!profile && svc && typeof svc.getUserProfile === 'function') {
+                            profile = await svc.getUserProfile(firebaseUser.uid, firebaseUser.email);
+                        } else if (!profile && typeof window.getUserProfile === 'function') {
+                            profile = await window.getUserProfile(firebaseUser.uid, firebaseUser.email);
+                        }
+                        currentUser = mapFirebaseUser(firebaseUser, profile);
                         hideLoginOverlay();
                         updateHeaderUserProfile();
                         if (wsClient) wsClient.connect();
@@ -392,6 +424,17 @@ const App = (() => {
             roleBadgeEl.textContent = currentUser.role;
             roleBadgeEl.className = `user-role-badge role-badge-${currentUser.role.toLowerCase()}`;
         }
+        const roleDropdown = document.getElementById('role-dropdown');
+        if (roleDropdown) {
+            roleDropdown.querySelectorAll('.role-dropdown-item').forEach(item => {
+                const itemRole = item.getAttribute('data-role');
+                if (itemRole === currentUser.role) {
+                    item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+        }
         if (userPill) userPill.style.display = 'flex';
     }
 
@@ -440,19 +483,69 @@ const App = (() => {
     }
 
     function setupAuthEvents() {
-        const form = document.getElementById('login-form');
+        // Tabs & Switch Links
+        const tabSignIn = document.getElementById('tab-signin');
+        const tabSignUp = document.getElementById('tab-signup');
+        const linkGotoSignup = document.getElementById('link-goto-signup');
+        const linkGotoSignin = document.getElementById('link-goto-signin');
+
+        // Forms
+        const loginForm = document.getElementById('login-form');
+        const signupForm = document.getElementById('signup-form');
+
+        // Sign In Form Elements
         const emailInput = document.getElementById('login-username');
         const passwordInput = document.getElementById('login-password');
         const errorEl = document.getElementById('login-error');
         const btnText = document.getElementById('login-btn-text');
         const spinner = document.getElementById('login-spinner');
         const togglePw = document.getElementById('login-toggle-pw');
+
+        // Create Account Form Elements
+        const signupName = document.getElementById('signup-name');
+        const signupEmail = document.getElementById('signup-email');
+        const signupRole = document.getElementById('signup-role');
+        const signupPassword = document.getElementById('signup-password');
+        const signupError = document.getElementById('signup-error');
+        const signupBtnText = document.getElementById('signup-btn-text');
+        const signupSpinner = document.getElementById('signup-spinner');
+        const signupTogglePw = document.getElementById('signup-toggle-pw');
+
         const btnLogout = document.getElementById('btn-logout');
 
+        // Tab Switching Helper
+        function showSignInTab() {
+            if (tabSignIn) tabSignIn.classList.add('active');
+            if (tabSignUp) tabSignUp.classList.remove('active');
+            if (loginForm) loginForm.style.display = 'flex';
+            if (signupForm) signupForm.style.display = 'none';
+            if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
+        }
+
+        function showSignUpTab() {
+            if (tabSignUp) tabSignUp.classList.add('active');
+            if (tabSignIn) tabSignIn.classList.remove('active');
+            if (loginForm) loginForm.style.display = 'none';
+            if (signupForm) signupForm.style.display = 'flex';
+            if (signupError) { signupError.style.display = 'none'; signupError.textContent = ''; }
+        }
+
+        if (tabSignIn) tabSignIn.addEventListener('click', showSignInTab);
+        if (tabSignUp) tabSignUp.addEventListener('click', showSignUpTab);
+        if (linkGotoSignup) linkGotoSignup.addEventListener('click', (e) => { e.preventDefault(); showSignUpTab(); });
+        if (linkGotoSignin) linkGotoSignin.addEventListener('click', (e) => { e.preventDefault(); showSignInTab(); });
+
+        // Password Visibility Toggles
         if (togglePw && passwordInput) {
             togglePw.addEventListener('click', () => {
                 const isPw = passwordInput.type === 'password';
                 passwordInput.type = isPw ? 'text' : 'password';
+            });
+        }
+        if (signupTogglePw && signupPassword) {
+            signupTogglePw.addEventListener('click', () => {
+                const isPw = signupPassword.type === 'password';
+                signupPassword.type = isPw ? 'text' : 'password';
             });
         }
 
@@ -460,8 +553,9 @@ const App = (() => {
             btnLogout.addEventListener('click', handleLogout);
         }
 
-        if (form) {
-            form.addEventListener('submit', async (e) => {
+        // 1. Handle Sign In Submission
+        if (loginForm) {
+            loginForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 errorEl.textContent = '';
                 errorEl.style.display = 'none';
@@ -477,7 +571,7 @@ const App = (() => {
                     if (typeof loginFn === 'function') {
                         const res = await loginFn(email, password);
                         if (res.success && res.user) {
-                            currentUser = mapFirebaseUser(res.user);
+                            currentUser = mapFirebaseUser(res.user, res.profile);
                             hideLoginOverlay();
                             updateHeaderUserProfile();
                             if (wsClient) wsClient.connect();
@@ -512,6 +606,54 @@ const App = (() => {
                 }
             });
         }
+
+        // 2. Handle Create Account (Sign Up) Submission
+        if (signupForm) {
+            signupForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                signupError.textContent = '';
+                signupError.style.display = 'none';
+                signupError.classList.remove('visible');
+                signupBtnText.textContent = 'Creating Account...';
+                signupSpinner.style.display = 'block';
+
+                const name = signupName.value.trim();
+                const email = signupEmail.value.trim();
+                const role = signupRole.value;
+                const password = signupPassword.value;
+
+                try {
+                    const registerFn = window.registerUser || (window.FirebaseService && window.FirebaseService.registerUser);
+                    if (typeof registerFn === 'function') {
+                        const res = await registerFn(name, email, password, role);
+                        if (res.success && res.user) {
+                            console.log('[AUTH] Account registered successfully with role:', role);
+                            currentUser = mapFirebaseUser(res.user, res.profile);
+                            hideLoginOverlay();
+                            updateHeaderUserProfile();
+                            if (wsClient) wsClient.connect();
+                            routeInitialView();
+                        } else {
+                            signupError.textContent = res.error || 'Account creation failed. Please verify your input.';
+                            signupError.style.display = 'block';
+                            signupError.classList.add('visible');
+                        }
+                    } else {
+                        signupError.textContent = 'Registration service unavailable. Please refresh.';
+                        signupError.style.display = 'block';
+                        signupError.classList.add('visible');
+                    }
+                } catch (err) {
+                    console.error('[AUTH] Signup exception:', err);
+                    signupError.textContent = err.message || 'Account creation failed.';
+                    signupError.style.display = 'block';
+                    signupError.classList.add('visible');
+                } finally {
+                    signupBtnText.textContent = 'Create Account';
+                    signupSpinner.style.display = 'none';
+                }
+            });
+        }
     }
 
     async function handleLogout() {
@@ -533,7 +675,7 @@ const App = (() => {
         if (userPill) userPill.style.display = 'none';
     }
 
-    // Modal Confirmation Dialog
+    // Modal Confirmation Dialog & Header Controls
     function setupHeaderEvents() {
         const modal = document.getElementById('confirm-modal');
         const btnYes = document.getElementById('btn-confirm-yes');
@@ -542,6 +684,45 @@ const App = (() => {
         const settingsModal = document.getElementById('settings-modal');
         const btnCloseSettings = document.getElementById('btn-close-settings');
         const btnSaveSettings = document.getElementById('btn-save-settings');
+
+        // Role Dropdown Switcher
+        const userPill = document.getElementById('user-pill');
+        const roleDropdown = document.getElementById('role-dropdown');
+
+        if (userPill && roleDropdown) {
+            userPill.addEventListener('click', (e) => {
+                // Ignore if clicked on an item inside
+                if (e.target.closest('.role-dropdown-item')) return;
+                const isShown = roleDropdown.style.display === 'flex';
+                roleDropdown.style.display = isShown ? 'none' : 'flex';
+            });
+
+            const roleItems = roleDropdown.querySelectorAll('.role-dropdown-item');
+            roleItems.forEach(item => {
+                item.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const newRole = item.getAttribute('data-role');
+                    roleDropdown.style.display = 'none';
+
+                    if (currentUser && newRole && currentUser.role !== newRole) {
+                        console.log(`[AUTH] User switching active role to: ${newRole}`);
+                        currentUser.role = newRole;
+                        const updateFn = window.updateUserRole || (window.FirebaseService && window.FirebaseService.updateUserRole);
+                        if (typeof updateFn === 'function') {
+                            await updateFn(currentUser.id, newRole);
+                        }
+                        updateHeaderUserProfile();
+                        routeInitialView();
+                    }
+                });
+            });
+
+            document.addEventListener('click', (e) => {
+                if (roleDropdown && !userPill.contains(e.target)) {
+                    roleDropdown.style.display = 'none';
+                }
+            });
+        }
 
         if (btnYes) {
             btnYes.addEventListener('click', () => {
