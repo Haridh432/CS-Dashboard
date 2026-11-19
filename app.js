@@ -26,7 +26,6 @@ const App = (() => {
         setupAuthEvents();
         setupAddMachineModal();
         setupGlobalRouting();
-        populateDemoCredentials();
 
         // WebSocket Status Handlers
         wsClient.onStatusChange = (status, detail) => {
@@ -290,20 +289,12 @@ const App = (() => {
         const btnText = document.getElementById('login-btn-text');
         const spinner = document.getElementById('login-spinner');
         const togglePw = document.getElementById('login-toggle-pw');
-        const hintToggle = document.getElementById('login-hint-toggle');
-        const hintPanel = document.getElementById('login-hint-panel');
         const btnLogout = document.getElementById('btn-logout');
 
         if (togglePw && passwordInput) {
             togglePw.addEventListener('click', () => {
                 const isPw = passwordInput.type === 'password';
                 passwordInput.type = isPw ? 'text' : 'password';
-            });
-        }
-
-        if (hintToggle) {
-            hintToggle.addEventListener('click', (e) => {
-                toggleDemoAccounts(e);
             });
         }
 
@@ -346,89 +337,6 @@ const App = (() => {
                 }
             });
         }
-    }
-
-    function toggleDemoAccounts(e) {
-        if (e) {
-            if (e.preventDefault) e.preventDefault();
-            if (e.stopPropagation) e.stopPropagation();
-        }
-        const panel = document.getElementById('login-hint-panel');
-        const toggle = document.getElementById('login-hint-toggle');
-        if (!panel) return;
-        
-        const isCurrentlyOpen = panel.classList.contains('open') || panel.style.display === 'block';
-        if (isCurrentlyOpen) {
-            panel.classList.remove('open');
-            panel.style.display = 'none';
-            if (toggle) toggle.classList.remove('open');
-        } else {
-            panel.classList.add('open');
-            panel.style.display = 'block';
-            if (toggle) toggle.classList.add('open');
-            setTimeout(() => {
-                panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }, 50);
-        }
-    }
-
-    async function populateDemoCredentials() {
-        const grid = document.getElementById('hint-grid');
-        if (!grid) return;
-
-        // If pre-rendered HTML cards exist in index.html, preserve them
-        if (grid.children && grid.children.length >= 3) {
-            return;
-        }
-
-        try {
-            const res = await ApiClient.getDemoCredentials();
-            const creds = res.credentials || [];
-
-            const roleColors = {
-                CEO: '#7C3AED',
-                CUSTOMER: '#047857',
-                OPERATOR: '#0369A1'
-            };
-
-            grid.innerHTML = creds.map(c => `
-                <div class="hint-card">
-                    <div class="hint-card-header" style="background: ${roleColors[c.role] || '#374151'}; display: flex; justify-content: space-between; align-items: center; padding: 8px 12px;">
-                        <span>${c.role}</span>
-                        <span style="font-size: 10px; font-weight: normal; opacity: 0.85;">${c.title}</span>
-                    </div>
-                    <div class="hint-card-body" style="padding: 10px 12px; display: flex; flex-direction: column; gap: 6px;">
-                        <div class="hint-field">
-                            <span class="hint-label" style="font-size: 9px; opacity: 0.6;">Email</span>
-                            <span class="hint-value" style="font-size: 12px; font-weight: 600;">${c.email}</span>
-                        </div>
-                        <div class="hint-field">
-                            <span class="hint-label" style="font-size: 9px; opacity: 0.6;">Password</span>
-                            <span class="hint-value" style="font-size: 12px; font-weight: 600;">${c.password}</span>
-                        </div>
-                        <button type="button" class="hint-autofill" onclick="App.autofillCredentials('${c.email}', '${c.password}')" style="margin-top: 4px; padding: 7px; font-size: 11px; font-weight: 700; background: ${roleColors[c.role] || '#4F46E5'}; color: white; border: none; border-radius: 6px; cursor: pointer;">
-                            Autofill ${c.role} Credentials
-                        </button>
-                    </div>
-                </div>
-            `).join('');
-        } catch (e) {
-            console.warn('Failed to load demo credentials:', e);
-        }
-    }
-
-    function autofillCredentials(email, password) {
-        const uInput = document.getElementById('login-username');
-        const pInput = document.getElementById('login-password');
-        const panel = document.getElementById('login-hint-panel');
-        const toggle = document.getElementById('login-hint-toggle');
-        if (uInput) uInput.value = email;
-        if (pInput) pInput.value = password;
-        if (panel) {
-            panel.classList.remove('open');
-            panel.style.display = 'none';
-        }
-        if (toggle) toggle.classList.remove('open');
     }
 
     async function handleLogout() {
@@ -671,8 +579,6 @@ const App = (() => {
         navigateToMachine,
         navigateBack,
         refreshCurrentView,
-        toggleDemoAccounts,
-        autofillCredentials,
         showConfirmModal,
         showAddMachineModal,
         confirmDeleteMachine,
