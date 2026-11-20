@@ -17,7 +17,7 @@ import {
 
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-    apiKey: "AIzaSyAf89nYZMx_agGM1xbApWM3hRqeHqxN-hQ",
+    apiKey: "ENTER_YOUR_FIREBASE_API_KEY",
     authDomain: "circularseed-d0ced.firebaseapp.com",
     databaseURL: "https://circularseed-d0ced-default-rtdb.asia-southeast1.firebasedatabase.app",
     projectId: "circularseed-d0ced",
