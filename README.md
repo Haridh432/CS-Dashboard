@@ -1,195 +1,220 @@
-# CircularSeed Role-Based Machine Monitoring Platform (FLEXISHRED-DC)
+# CircularSeed FLEXISHRED-DC • Machine Monitoring Platform
 
-Industrial-grade real-time machine monitoring and fleet operations platform for **CircularSeed FLEXISHRED-DC Plastic Shredders**.
+[![Live Demo](https://img.shields.io/badge/Live_Dashboard-GitHub_Pages-00A5D6?style=for-the-badge&logo=github)](https://haridh432.github.io/CS-Dashboard/)
+[![Firebase](https://img.shields.io/badge/Firebase-Auth_%26_RTDB-FFA000?style=for-the-badge&logo=firebase)](https://firebase.google.com/)
+[![License](https://img.shields.io/badge/License-Proprietary-slate?style=for-the-badge)](#)
+
+Industrial-grade, role-based real-time machine monitoring and fleet operations platform for **CircularSeed FLEXISHRED-DC Plastic Shredders**.
+
+The platform provides live telemetry streaming, safety interlock monitoring, operational status, and role-scoped dashboards (CEO, Operator, Customer) powered by **Firebase Authentication** and **Firebase Realtime Database**, with optional Node.js Express/WebSocket edge gateway connectivity for direct ESP32 hardware bridges.
 
 ---
 
 ## 1. System Architecture
 
 ```
-+---------------------------------------------------------------------------------------+
-|                              FLEXISHRED-DC MACHINE FLEET                              |
-|                                                                                       |
-|  [CS-FS-0001: 48V Pro Dual BLDC]     [CS-FS-0002: 48V Std Dual BLDC]                  |
-|  [CS-FS-0003: 12V L298N Prototype]   [CS-FS-0004: 48V Pro Solar Intake]               |
-|  [CS-FS-0005: 48V Std Rotor Jam]     [CS-FS-0006: Offline Unit]                       |
-+───────────────────────────────────────────────┼───────────────────────────────────────+
-                                                │ Hardware UART / WiFi Telemetry
-                                                ▼
-+───────────────────────────────────────────────────────────────────────────────────────+
-|                           ESP32 WIRELESS / ETHERNET GATEWAY                           |
-|       • Direct STM32 CRC16 Binary Bridge (`gateway/esp32_firmware.ino`)               |
-|       • 12V DC L298N Optical Encoder Gateway (`gateway/esp32_l298n_prototype.ino`)    |
-+───────────────────────────────────────────────┼───────────────────────────────────────+
-                                                │ REST API / WebSocket Ingestion
-                                                ▼
-+───────────────────────────────────────────────────────────────────────────────────────+
-|                       AUTHENTICATED NODE.JS & EXPRESS BACKEND                         |
-|                                                                                       |
-|  • Security & Session: JWT Tokens, bcrypt password hashing, CORS, Helmet              |
-|  • Database: SQLite (via `node:sqlite` DatabaseSync) in `data/circularseed.db`        |
-|  • Strict RBAC: Tenant isolation (Customers strictly restricted to their own org)     |
-|  • Real-Time WebSocket Server (`/ws`): Machine-specific & Fleet subscriptions         |
-|  • Authoritative Simulation Engine: 1 Hz telemetry tick & interactive fault sandbox   |
-+───────────────────────────────────────────────┼───────────────────────────────────────+
-                                                │ WebSocket Telemetry & REST API
-                                                ▼
-+───────────────────────────────────────────────────────────────────────────────────────+
-|                             ROLE-BASED WEB DASHBOARD (SPA)                            |
-|                                                                                       |
-|  [CEO Dashboard: /ceo/dashboard]                                                      |
-|   • 5 Summary Stat Cards: Total, Running, Idle/Stopped, Active Faults, Disconnected   |
-|   • Minimal Machine Cards Grid with Live Search, Status/Customer/Model Filters & Sort  |
-|   • Compact Fleet Health Watchdog: Active faults, stale machines, and recent events   |
-|                                                                                       |
-|  [Customer Dashboard: /customer/dashboard]                                            |
-|   • Tenant-Scoped: Strictly displays only machines assigned to customer's org        |
-|   • Customer Summary & Minimal Cards Grid (Read-only monitoring; commands disabled)   |
-|                                                                                       |
-|  [Operator Dashboard: /operator/dashboard]                                            |
-|   • Single-unit auto-load or compact multi-unit machine selector                      |
-|   • Current operational telemetry (RPM, Voltage, Current, Safety Interlocks)          |
-|   • Validated Machine Controls (Start, Stop, Speed PWM setting, Fault Reset)          |
-|                                                                                       |
-|  [Detailed Machine Dashboard: /machines/{machineId}]                                  |
-|   • Section A: Machine Overview & Control                                             |
-|   • Section B: Motor Monitoring (Dual BLDC or 12V L298N Prototype with Encoder)       |
-|   • Section C: 48V / 12V DC Power & Accumulated Energy Wh / kWh                       |
-|   • Section D: Battery & Solar Subsystem (with NOT CONFIGURED handling)               |
-|   • Section E: Safety & Interlock Circuits (E-Stop, Guard, Overload, Jam, Comms)      |
-|   • Section F: Historical Data & Trend Charts (1h, 24h, 7d, all ranges via SVG)      |
-|   • Section G: Maintenance Records & Export (CSV, JSON)                               |
-+---------------------------------------------------------------------------------------+
++───────────────────────────────────────────────────────────────────────────────────────────+
+|                               FLEXISHRED-DC MACHINE FLEET                                 |
+|                                                                                           |
+|  [CS001: Live Production Shredder]       [CS-FS-0002: 48V Std Dual BLDC]                  |
+|  [CS-FS-0003: 12V L298N Prototype]       [CS-FS-0004: 48V Pro Solar Intake]               |
++─────────────────────────────────────────────┬─────────────────────────────────────────────+
+                                              │ Live Sensor Telemetry (WiFi / UART)
+                                              ▼
++───────────────────────────────────────────────────────────────────────────────────────────+
+|                                  FIREBASE REALTIME CLOUD                                  |
+|                                                                                           |
+|  • Project ID: circularseed-d0ced                                                         |
+|  • Firebase Authentication: Modular SDK v11 (Email/Password, Token Lifecycle)             |
+|  • Firebase Realtime Database: asia-southeast1                                           |
+|    - `machines/CS001`: Live telemetry streaming (Voltage, Current, Power, RPM, Temp, etc)  |
+|    - `users/{uid}`: Authoritative user profiles, assigned roles, and organizations        |
++─────────────────────────────────────────────┬─────────────────────────────────────────────+
+                                              │ Realtime Synchronization
+                                              ▼
++───────────────────────────────────────────────────────────────────────────────────────────+
+|                             ROLE-BASED WEB APPLICATION (SPA)                              |
+|                          (GitHub Pages or Local Node.js Gateway)                          |
+|                                                                                           |
+|  [Authentication & Onboarding]                                                            |
+|   • Firebase Email & Password Authentication                                              |
+|   • "Create Account" (Sign Up) with Role Selection (CEO, Operator, Customer)              |
+|   • Dynamic Header Role Switcher for instant testing and role re-assignment               |
+|                                                                                           |
+|  [CEO Dashboard: /ceo/dashboard]                                                          |
+|   • 5 Real-time Fleet Stat Counters: Total, Running, Idle/Stopped, Faults, Offline       |
+|   • Minimal Fleet Cards Grid with Live Search, Status/Customer Filters, and Sort          |
+|   • Realtime Telemetry Auto-Sync directly to machine cards                                |
+|                                                                                           |
+|  [Customer Dashboard: /customer/dashboard]                                                |
+|   • Tenant-Scoped: Organization machines, aggregated runtime, and operational metrics     |
+|   • Read-only safety and status monitoring (commands locked)                             |
+|                                                                                           |
+|  [Operator Dashboard: /operator/dashboard]                                                |
+|   • Active operating machine view with rapid multi-machine selector bar                   |
+|   • Live operational metrics (RPM, Bus Voltage, Current, Motor Temp, Safety Interlocks)   |
+|   • Machine control actions (Start, Stop, Speed adjustment, Fault Reset)                  |
+|                                                                                           |
+|  [Detailed Machine Dashboard: /machines/{machineId}]                                      |
+|   • Section A: Machine Status Hero & Operational Controls                                 |
+|   • Section B: Motor Monitoring (Live RPM gauge, BLDC / L298N Prototype)                  |
+|   • Section C: DC Power Subsystem (Bus Voltage, Current, Wattage, Accumulated Energy)     |
+|   • Section D: Battery & Solar Subsystem (with NOT CONFIGURED detection)                  |
+|   • Section E: Safety & Interlock Loop (Emergency Stop, Hopper Guard, Overload, Jam)      |
+|   • Section F: Telemetry Visualizer & Historical Trend Charts                             |
+|   • Section G: Maintenance Logs & Export (CSV, JSON)                                      |
++───────────────────────────────────────────────────────────────────────────────────────────+
 ```
 
 ---
 
-## 2. Role-Based Access Control (RBAC) Matrix
+## 2. Firebase Integration
 
-| Feature | CEO / Administrator | Customer | Machine Operator |
+### A. Firebase Authentication & Account Management
+The application uses the official **Firebase Modular SDK v11** for secure, serverless client authentication:
+- **Sign In (`signInWithEmailAndPassword`)**: Validates email and password, initializes user session, and loads user role and settings.
+- **Create Account (`createUserWithEmailAndPassword`, `updateProfile`)**: Allows new users to register directly on the platform with:
+  - Full Name
+  - Email Address
+  - Account Role (`OPERATOR`, `CUSTOMER`, `CEO`)
+  - Password (min 6 characters)
+- **Profile Persistence (`/users/{uid}`)**: When a user registers or changes roles, their authoritative profile is stored in Firebase Realtime Database and cached in `localStorage` for instant offline-resilient startup.
+- **Header Role Switcher**: Users can click the User Pill / Role Badge in the top navigation bar to open an on-the-fly role switcher menu (`CEO`, `OPERATOR`, `CUSTOMER`) for live testing and view transition.
+- **Sign Out (`signOut`)**: Gracefully clears temporary dashboard state and returns the user to the login screen.
+
+### B. Firebase Realtime Database (RTDB) Telemetry
+Live telemetry from machine `CS001` is read in real time from:
+```
+https://circularseed-d0ced-default-rtdb.asia-southeast1.firebasedatabase.app/machines/CS001
+```
+
+#### Realtime Schema:
+| Key | Type | Description |
+| :--- | :--- | :--- |
+| `status` | String | Operating state (`RUNNING`, `STOPPED`, `READY`, `FAULT`, `OFFLINE`) |
+| `voltage` / `Voltage` | Number | DC bus voltage (e.g. `98.0` V) |
+| `current` | Number | Motor current draw (e.g. `2.0` A) |
+| `power` | Number | Active wattage consumption (`V × A`) |
+| `rpm` | Number | Motor shaft rotational speed (e.g. `1224` RPM) |
+| `motorTemperature` | Number | Motor winding / casing temperature (e.g. `25.8` °C) |
+| `runtime` | Number | Cumulative operational runtime in minutes |
+| `energy` | Number | Accumulated energy consumption in kWh |
+| `emergencyStop` | Boolean | Physical Emergency-Stop button state (`true` = tripped) |
+| `jam` | Boolean | Rotor mechanical jam condition detection |
+| `fault` | String | Operational fault code (`NORMAL`, `OVERLOAD`, `MOTOR_OVERTEMP`, etc.) |
+| `wifi` | Boolean | Wireless network connectivity status |
+| `lastUpdate` | Number / String | Last telemetry heartbeat timestamp |
+
+Both **FleetOverview** cards and the **MachineDetail** dashboard automatically listen to `onValue` events, updating live values and animated status pills without page reloads.
+
+---
+
+## 3. Role-Based Access Control (RBAC) Matrix
+
+| Feature | CEO / Administrator | Machine Operator | Customer |
 | :--- | :---: | :---: | :---: |
-| **Target Route** | `/ceo/dashboard` | `/customer/dashboard` | `/operator/dashboard` |
-| **Machine Scope** | All registered machines | Organization-assigned only | User-assigned machines only |
-| **Fleet Statistics** | Full manufactured fleet stats | Organization summary only | Assigned machine status |
-| **Machine Detail View** | Full detail (Sections A–G) | Full detail (Sections A–G) | Full operational detail |
-| **Operational Controls** | Authorized (Start/Stop/Speed) | **DENIED (Read-Only)** | Authorized (Assigned units) |
-| **Simulation Sandbox** | Enabled (Demo mode) | Disabled | Enabled (Demo mode) |
-| **Maintenance Export** | CSV & JSON | CSV & JSON | Read-only |
-| **Cross-Org Access** | Full fleet visibility | **Strictly blocked (HTTP 403)** | Blocked to assigned units |
+| **Default Route** | `/ceo/dashboard` | `/operator/dashboard` | `/customer/dashboard` |
+| **Machine Scope** | Complete fleet (all units) | Assigned operational units | Organization-assigned units only |
+| **Fleet Statistics** | Total, Running, Idle, Faults, Offline | Assigned machine operational stats | Organization summary & runtime |
+| **Detailed Machine View** | Full detail (Sections A–G) | Full detail & live controls | Read-only telemetry (Sections A–G) |
+| **Operational Controls** | Authorized (Start/Stop/Speed) | Authorized (Assigned units) | **LOCKED (Read-Only)** |
+| **Role Switching** | Full access | Full access | Full access |
+| **Telemetry Export** | CSV & JSON | CSV & JSON | Read-only CSV/JSON |
 
 ---
 
-## 3. Demo Accounts & Credentials
+## 4. Hardware Gateway & ESP32 Firmware
 
-The platform is pre-seeded with sample development accounts:
+The repository includes ready-to-flash Arduino/ESP32 firmware inside the [`gateway/`](gateway/) directory:
 
-| Role | Email | Password | Assigned Scope |
-| :--- | :--- | :--- | :--- |
-| **CEO / Admin** | `ceo@circularseed.com` | `CircularCEO#2025` | Complete fleet (all 6 machines across all organizations) |
-| **Customer 1** | `customer@acme-plastics.com` | `Customer#Acme2025` | Acme Plastics Corp (`CS-FS-0001`, `0002`, `0003`) |
-| **Customer 2** | `customer@green-cycle.com` | `Customer#Green2025` | GreenCycle Industries (`CS-FS-0004`, `0005`) |
-| **Operator 1** | `operator@circularseed.com` | `Operator#Flexishred1` | Assigned to `CS-FS-0001` (opens directly to live operating view) |
-| **Operator 2** | `operator2@circularseed.com` | `Operator#Flexishred2` | Assigned to `CS-FS-0002` & `CS-FS-0003` (selector view) |
+### 1. Standard STM32 / WiFi Gateway (`gateway/esp32_firmware.ino`)
+- Connects to industrial STM32 motor controllers over UART with CRC16 packet validation.
+- Streams JSON telemetry to Firebase Realtime Database or backend WebSockets at 1–5 Hz.
 
-*(Credentials can be auto-filled directly from the login screen via the "Demo Accounts" accordion panel).*
+### 2. 12V DC L298N Prototype (`gateway/esp32_l298n_prototype.ino`)
+Specifically designed for CircularSeed's small-scale prototype testbed:
+- **Motor Driver:** L298N Dual H-Bridge (`ENA`, `IN1`, `IN2` on GPIOs 25, 26, 27).
+- **Encoder:** Optical quadrature encoder (`A`, `B` on GPIOs 34, 35) with interrupt-driven RPM calculation.
+- **Safety Interlocks:**
+  - Hardware E-Stop button (GPIO 18, active LOW).
+  - Mechanical hopper limit switch (GPIO 19, active LOW).
+  - ACS712 5A Hall-effect current shunt (GPIO 36).
+- **Instant Cut-off:** Immediate hardware cut-off upon emergency button press or hopper opening.
 
 ---
 
-## 4. Quickstart: Installation and Running Locally
+## 5. Local Setup & Running Locally
 
 ### Prerequisites
-- Node.js (v18.0.0 or higher; built-in SQLite `node:sqlite` supported on Node 22+)
+- Node.js (v18.0.0 or higher)
 - Modern web browser (Chrome, Edge, Firefox, Safari)
 
 ### Installation
 ```bash
-# Clone repository
-git clone https://github.com/circularseed/circularseed-platform.git
-cd circularseed-platform
+# Clone the repository
+git clone https://github.com/Haridh432/CS-Dashboard.git
+cd CS-Dashboard
 
-# Install production dependencies
+# Install backend dependencies (optional for local gateway)
 npm install
 ```
 
-### Running the Platform Server
+### Running the Dashboard
+
+#### Option A: Direct Static Access (GitHub Pages / File Server)
+The client application is completely standalone and communicates directly with Firebase Auth and Firebase Realtime Database.
+You can open `index.html` in any modern web browser or serve it with:
 ```bash
-# Start backend Express & WebSocket server (port 3000)
+npx serve .
+```
+Or access the live deployment directly at:
+**[https://haridh432.github.io/CS-Dashboard/](https://haridh432.github.io/CS-Dashboard/)**
+
+#### Option B: Local Express & WebSocket Server
+To run the local edge server with WebSocket gateway on port 3000:
+```bash
 npm start
 ```
-
-Open your browser to:
+Then visit:
 - **Application Portal:** [http://localhost:3000](http://localhost:3000)
-- **CEO Fleet Dashboard:** [http://localhost:3000/ceo/dashboard](http://localhost:3000/ceo/dashboard)
-- **Customer Dashboard:** [http://localhost:3000/customer/dashboard](http://localhost:3000/customer/dashboard)
+- **CEO Dashboard:** [http://localhost:3000/ceo/dashboard](http://localhost:3000/ceo/dashboard)
 - **Operator Dashboard:** [http://localhost:3000/operator/dashboard](http://localhost:3000/operator/dashboard)
+- **Customer Dashboard:** [http://localhost:3000/customer/dashboard](http://localhost:3000/customer/dashboard)
 
 ---
 
-## 5. Registered Machines Registry
+## 6. Running Automated Tests
 
-| Machine ID | Model | Organization | Hardware Configuration | State |
-| :--- | :--- | :--- | :--- | :---: |
-| **`CS-FS-0001`** | FLEXISHRED-DC Pro | Acme Plastics Corp | Dual 48V BLDC, Battery + Solar equipped, Interlocks | **RUNNING** |
-| **`CS-FS-0002`** | FLEXISHRED-DC Std | Acme Plastics Corp | Dual 48V BLDC, 48V DC bus, Battery NOT CONFIGURED | **READY** |
-| **`CS-FS-0003`** | FLEXISHRED-DC Micro | Acme Plastics Corp | **Small 12V DC Motor with L298N H-Bridge Driver & Optical Quadrature Encoder** | **STOPPED** |
-| **`CS-FS-0004`** | FLEXISHRED-DC Pro | GreenCycle Industries | Dual 48V BLDC, 48V DC bus, Solar generation configured | **RUNNING** |
-| **`CS-FS-0005`** | FLEXISHRED-DC Std | GreenCycle Industries | Dual 48V BLDC, Overload & Rotor Jam tripped | **FAULT** |
-| **`CS-FS-0006`** | FLEXISHRED-DC Pro | CircularSeed Internal | Dual 48V BLDC, Disconnected testbed | **OFFLINE** |
-
----
-
-## 6. Small 12V DC Motor Prototype (L298N Driver) Integration
-
-The platform includes first-class support for CircularSeed's small 12 V DC encoder motor prototype:
-
-- **Machine ID:** `CS-FS-0003`
-- **Firmware source:** [`gateway/esp32_l298n_prototype.ino`](gateway/esp32_l298n_prototype.ino)
-- **Wiring pinout:**
-  - `ENA` &rarr; ESP32 GPIO 25 (PWM Speed Channel 0)
-  - `IN1` &rarr; ESP32 GPIO 26 (Direction Forward)
-  - `IN2` &rarr; ESP32 GPIO 27 (Direction Reverse)
-  - `Encoder A` &rarr; ESP32 GPIO 34 (Interrupt Service Routine, rising edge)
-  - `Encoder B` &rarr; ESP32 GPIO 35 (Quadrature direction reading)
-  - `E-Stop Switch` &rarr; ESP32 GPIO 18 (Active LOW)
-  - `Hopper Guard` &rarr; ESP32 GPIO 19 (Limit switch, active LOW)
-  - `Current Sensor` &rarr; ESP32 GPIO 36 (ACS712 5A DC Hall-effect shunt)
-- **Dashboard Features:**
-  - Speed PWM adjustment slider (0–255 range)
-  - Real-time optical encoder RPM measurement
-  - Driver H-Bridge thermal monitoring
-  - Instant hardware halt upon E-stop button depression or hopper guard opening
-
----
-
-## 7. Running Automated Tests
-
-Run the test suite to verify authentication, RBAC, tenant isolation, safety interlocks, and telemetry APIs:
+A comprehensive test suite verifies authentication, RBAC authorization, tenant boundaries, safety interlocks, and telemetry parsing:
 
 ```bash
 node tests/auth_rbac.test.js
 ```
 
-All 13 automated test assertions cover:
-1. Valid CEO login and JWT issuance
-2. Invalid password rejection
-3. Server-side token validation
-4. Customer login with organization binding
-5. Full fleet scoping for CEO
-6. Strict cross-tenant isolation (Acme customer blocked from GreenCycle machines)
-7. Single-machine operator scoping
-8. Multi-machine operator scoping
-9. Customer machine command restriction (Read-only enforcement)
-10. Operator command dispatch on assigned machine
-11. Safety Interlock rejection (START blocked when E-Stop or Guard is open)
-12. Dynamic fleet summary calculations
-13. Historical telemetry database retrieval
+Test assertions cover:
+1. Valid user authentication and token handling
+2. Invalid credential rejection and error formatting
+3. Customer organization-tenant isolation
+4. Full fleet visibility scoping for CEO role
+5. Operator scoping to assigned machines
+6. Customer command restriction (strict read-only enforcement)
+7. Operator command dispatching on assigned hardware
+8. Safety interlock protection (START blocked when E-Stop or Hopper Guard is open)
+9. Dynamic fleet summary telemetry calculation
+10. Historical telemetry database retrieval
 
 ---
 
-## 8. Safety & Compliance Architecture
+## 7. Safety & Compliance Architecture
 
-1. **Independent Safety Interlocks**: Missing safety telemetry is **never interpreted as proof that a machine is safe**.
-2. **Dashboard Stop is Operational**: The web dashboard Stop button is a software command. It **never replaces or bypasses the physical emergency-stop loop**.
-3. **No Fabricated Telemetry**: Sensors not installed or disconnected display `N/A` or `NOT CONFIGURED` rather than misleading zeros.
-4. **Stale Data Watchdog**: Telemetry delayed for more than 3.5 seconds is marked `STALE DATA` and control buttons are immediately locked.
-5. **No Blind Mode Switching**: Telemetry packets are explicitly marked `DEMO` or `LIVE` to prevent simulation data from being mistaken for real hardware.
+1. **Independent Physical Safety Loops:** Software commands never replace or bypass physical emergency-stop circuits. If an emergency-stop is triggered in hardware, software cannot force a motor start.
+2. **Missing Telemetry Fail-Safe:** Disconnected or missing telemetry is never interpreted as proof of safety. The dashboard defaults to a locked, safe state.
+3. **No Fabricated Telemetry:** Sensors not present on a machine model explicitly show `NOT CONFIGURED` or `N/A` rather than misleading zero readings.
+4. **Stale Data Watchdog:** Telemetry delayed by more than 3.5 seconds is marked `STALE DATA` and control dispatches are automatically gated.
+5. **Clear Telemetry Provenance:** Telemetry streams indicate whether data originates from live hardware (`LIVE`) or a development simulation sandbox.
+
+---
+
+## 8. License
+
+Copyright &copy; 2026 CircularSeed. Proprietary & Confidential. All rights reserved.
